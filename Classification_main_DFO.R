@@ -21,26 +21,31 @@
 #   some RMD reports and comparing results.
 # 2024/09/11: A few minor(ish) changes: consolidate all changes to data (ie, transforming, centering, 
 #   scaling) in one place. Bathy and Substrate applied as exclusions. 
+# 2024/10/02: Update RMD based on findings from LSSM work. 
+
+# To Do:
+#   Find where we document what happened to FW index
+#   Include the updated names (or maybe not?
+#   See about gap statistics and fix the transformation table)
+
 #################################################################################
 
-print('Starting Broughton - DFO Version ...')
+print('Starting Classification - DFO Version ...')
 rm(list=ls(all=T))  # Erase environment.
 
 # Load necessary packages and functions ... 
-source( "broughton_functions.R" )
+source( "classification_functions.R" )
 # source( "Plot_Functions.R" )
 
 # Directories ...
 #-- Source and output directories. Will be created if doesn't exist, overwritten if it does.
 raster_dir <- 'C:/Data/SpaceData/Classification/MSEA'
-data_dir   <- 'C:/Data/Git/Broughton/Data'
-rmd_dir    <- 'C:/Data/Git/Broughton' 
-results_dir<- 'C:/Data/Git/Broughton/Results' 
+data_dir   <- 'C:/Data/Git/classification-DFO/Data'
+results_dir<- 'C:/Data/Git/classification-DFO/Results' 
 
 # Processing FLAGS...
-loadtifs <- T # If true the data will be re-loaded from TIFs, else it will be loaded from rData.
+loadtifs <- F # If true the data will be re-loaded from TIFs, else it will be loaded from rData.
 clipdata <- T # If true a spatial subset of the data will be taken based on a polygon shape file. 
-scaledat <- T # If true, imported data will transformed, centered, and scaled.
 reclust  <- T # If true, re-cluster full data set prior to mapping, else predict to unclassified pixels.
 addKmDat <- T
 
@@ -79,31 +84,23 @@ if (loadtifs) {
 #  load( paste0( data_dir, '/tifs_DFO_scaled_QCS_2024-09-05.rData' ))
 #  load( paste0( data_dir, '/tifs_DFO_centred_QCS_2024-09-05.rData' ))
 
- load( paste0( data_dir, '/tif_stack_2024-09-13.rData' ))
+ load( paste0( data_dir, '/tif_stack_2024-10-02.rData' ))
 #  load( paste0( data_dir, '/t_stack_data_2024-09-14.rData' ))
 }
 
 
 #---- Final data preparation ----
-#NOTE: Everything from here down is in scaled units. 
 
-#-- Intergerize scaled data to reduce data size and improve performance. 
-# NOTE: 2024/06/03: Integerize throws a warning (layers with no data) on the MSEA data set.
-#   but no problem evident in results. Less useful with trimmed data, but may still have 
-#   value for larger data sets.
-
-#Vestigial. Could be useful for even larger data? May not be suitable for some data.
-#prepped_layers <- Integerize( tif_stack )
-
-# Move to matrix space from raster space 
-stack_data <- getValues( tif_stack )
-
-#-- Quick correlation across data layers
-x <- stack_data
+# Quick correlation across data layers
+#-- Move to matrix space from raster space 
+x <- getValues( tif_stack )
+#-- Use only pixels with all data
 x_clean <- x[ complete.cases(x), ]
+
 cor_table <- cor( x_clean )
 cor_table[lower.tri(cor_table)] <- NA
 (cor_table >= 0.6) & (cor_table != 1)
+#--> cor_table prepared for printing in the RMD script.
 
 #-- Remove correlated layers from raster stack
 selected_stack <- dropLayer( tif_stack, c("bathymetry", "SUBSTRATE", "qcs_freshwater_index", "salinity_range", "temp_mean_summer", "circ_mean_summer",
@@ -131,14 +128,9 @@ if (scaledat) {
   print('Scaled data saved.')
 }
 
-### Histograms of scaled vars only in RMD. 
-# par(mfrow = c(2, 4))
-# for (i in 1:dim(t_stack_data)[2]) {
-# x <- hist(t_stack_data[, i], nclass=50, main = colnames(t_stack_data)[i], xlab="")
-# print(x)
-# }
+### Histograms of unscaled and scaled vars in the RMD. 
 
-# Compare pre-post skew? Put it on the histograms! :)
+# Compare pre-post skew? Put it on the histograms? :)
 # RENAME variables after selection for plot prettiness.
 
 new_names <- c("bathymetry", "substrate", "standard_dev_slope, arc-chord rugosity",
@@ -315,16 +307,16 @@ writeRaster( cluster_raster, paste0( results_dir, out_tif_fname ), overwrite=TRU
 
 ### Process file 
 # To HTML ... 
-rmarkdown::render( "Broughton_DFO.Rmd",   
-                   output_format = 'html_document',
-                   output_file = paste0( "C:/Data/Git/Broughton/Results/DFO_Class_Report_", today ) )
+# rmarkdown::render( "Broughton_DFO.Rmd",   
+#                    output_format = 'html_document',
+#                    output_file = paste0( "C:/Data/Git/Broughton/Results/DFO_Class_Report_", today ) )
 
 # To PDF:
 # the tinytex library is necessary for compiling the .tex file to be rendered.
 # then run >tinytex::install_tinytex()
-rmarkdown::render( "Broughton_DFO_PDF.Rmd",   
+rmarkdown::render( "Classification_DFO_PDF.Rmd",   
                    output_format = 'pdf_document',
-                   output_dir ="C:/Data/Git/Broughton/Results",
+                   output_dir ="C:/Data/Git/Classification-DFO/Results",
                    output_file = paste0( "MSEA_gdata_5cluster_", today ))
 
 #---- Some details on correlation analysis ... ----

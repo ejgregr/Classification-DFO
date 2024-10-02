@@ -1,5 +1,5 @@
 ---
-title: "Coastal clusters for the Local Seaweed Services Model"
+title: "Cluster analysis of nearshore physical predictors"
 author: "Edward Gregr"
 date: "`r format(Sys.Date(), '%B %d, %Y')`"
 output:
@@ -15,14 +15,14 @@ header-includes:
   - \usepackage{booktabs} # for tables
   - \usepackage{pdflscape}
   - \usepackage{tocloft}
-  - \usepackage{float} # for controlling placement of tables and figures
-  - \usepackage{placeins} # for a cmd to keep text in place.
-  - \setlength{\intextsep}{5pt} % Vertical space above & below [h] floats
-  - \setlength{\textfloatsep}{5pt} % Vertical space below (above) [t] ([b]) floats
-  - \setlength{\abovecaptionskip}{5pt}
-  - \setlength{\belowcaptionskip}{5pt}
+#  - \addcontentsline{toc}{section}{List of Figures} # Add List of Figures to TOC
+#  - \addcontentsline{toc}{section}{List of Tables}  # Add List of Tables to TOC
 ---
+```{r Notes, echo=FALSE }
+# pdflscape interacts funny with the Tex formatted tables, and something gets stuck in its buffer.
+# I Used kable to construct tables, and ... 
 
+```
 \newpage
 
 \listoftables
@@ -131,26 +131,25 @@ cor_table[ y_low ] <- NA
 knitr::kable( cor_table, digits = 2, format = "latex", booktabs = TRUE, 
               caption = "Correlation matrix for assessing predictor cross-correlations") %>%
   kable_styling( latex_options = c("scale_down") ) %>% 
-  row_spec(0, angle = 90) 
-#%>% landscape()
+  row_spec(0, angle = 90) %>% landscape()
 
 x <- 0.6
 high_rows <- apply(cor_table, 1, function(row) any(row > x, na.rm = TRUE))
 z <- cor_table[ high_rows, ]
 knitr::kable( z, digits = 2, format = "latex", booktabs = TRUE, 
-              caption = "Predictor variables with 1 or more correlations that exceed 0.6 threshold") %>%
+              caption = "Predictor variables that exceed 0.6 threshold") %>%
   kable_styling( latex_options = c("scale_down") ) %>% 
-  row_spec(0, angle = 90) 
-#%>% landscape()
+  row_spec(0, angle = 90) %>% landscape()
+
 ```
-\newpage
+
 ## Distributions and outliers
 Skewness scores show strong nonnormality for several predictors. Transforms were applied to *freshwater_index*, *standard_dev_slope*, and *rei_qcs*. For all 3 predictors, ceilings were applied to pull in outliers and power transforms improved the skew (Table X). (**Table 4**). 
 
 ```{r SkewTable, results='asis', echo=FALSE, table.pos='t'}
 
-skdat <- data.frame(Predictor = character(), Pre_Skew = numeric(), Post_Skew = numeric(), stringsAsFactors = FALSE)
 
+skdat <- data.frame(Predictor = character(), Pre_Skew = numeric(), Post_Skew = numeric(), stringsAsFactors = FALSE)
 # Loop through the columns of the dataset
 for (i in 1:ncol(t_stack_data)) {
   # Calculate skewness for each column in both datasets
@@ -160,25 +159,20 @@ for (i in 1:ncol(t_stack_data)) {
   # Combine the column name and skewness values into a new data frame row
   new_row <- data.frame(
     Predictor = colnames(t_stack_data)[i],  # Get column name
-    Pre_Skew  = round(pre, 3),                     # Skewness before transformation
-    Post_Skew = round(post, 3)                     # Skewness after transformation
+    Pre_Skew = pre,                     # Skewness before transformation
+    Post_Skew = post                    # Skewness after transformation
   )
   # Append the new row to skdat
   skdat <- rbind(skdat, new_row)
 }
 
-# Now add the transform values 
-# Create the data frame
-# df <- data.frame(
-#   Predictor = c("REI", "freshwater_index", "standard_dev_slope", "temp_range"),
-#   Ceiling = c(0.3, 0.025, 10, NA),
-#   Power_transform = c("1/2", "1/3", "1/2", "1/2")
-# )
-# Merge the data frames
-
 # Print the resulting data frame
+skdat
+
+
+
 knitr::kable( skdat, format = "latex", booktabs = TRUE, 
-              caption = "Transforms applied to skewed predictors and the resulting change in skewness.") %>%
+              caption = "Ceiling and power transform values for highly skewed predictors.") %>%
 kable_styling(latex_options = "hold_position")
 
 ```
@@ -197,94 +191,134 @@ df <- data.frame(
 knitr::kable(df, format = "latex", booktabs = TRUE, col.names = c("Predictor", "Ceiling", "Power transform"))
 ```
 
-Pre (Figure 1) and post (Figure 2) histograms showing the effects of the transformation and scaling of the data. 
+
+#```{r PreAndPostHists, echo=FALSE, include=FALSE, fig.pos='t', fig.cap= c("Histograms of the selected, unmodified #Predictors.", "Histograms of selected, transformed, and scaled predictor data."), out.extra='keepaspectratio', #Fig.align='center'}
+
 \newpage
-```{r preHists, echo=FALSE, fig.pos='h', fig.cap="Histograms of the selected, unmodified predictors.", fig.align='center', fig.width=8, fig.height=3.75}
+```{r preHists, echo=FALSE, fig.pos='t', fig.cap="Histograms of the selected, unmodified predictors.", out.extra='keepaspectratio', fig.align='center', fig.width=8, fig.height=4, fig.show='asis'}
 
-# fig.pos='H', 
-#```{r PreAndPostHists, echo=FALSE, include=FALSE, fig.pos='t', fig.cap= c("Histograms of the #selected, unmodified #Predictors.", "Histograms of selected, transformed, and scaled predictor #data."), out.extra='keepaspectratio', Fig.align='center'}
-
-# Plot the first group of 8 histograms
-par(mfrow = c(2, 4), mar = c(2, 2, 2, 2))
+# Plot the first group of 6 histograms
+par(mfrow = c(2, 3), mar = c(2, 2, 2, 2))
 
 for (i in 1:dim(stack_data)[2]) {
   hist(stack_data[, i], nclass=50, main = colnames(stack_data)[i], xlab="")
 }
 ```
 
-<!-- \smallskip 
-     \medskip -->
-\bigskip
+```{r transHists, echo=FALSE, fig.pos='t', fig.cap="Histograms of selected, transformed, and scaled predictor data.", out.extra='keepaspectratio', fig.align='center', fig.width=8, fig.height=4, fig.show='asis'}
 
-```{r transHists, echo=FALSE, fig.cap="Histograms of the selected, transformed, and scaled predictor data.", fig.pos='h', fig.align='center', fig.width=8, fig.height=3.75}
-
-# Plot the second group of 8 histograms
-par(mfrow = c(2, 4), mar = c(2, 2, 2, 2))
+# Plot the second group of 6 histograms
+par(mfrow = c(2, 3), mar = c(2, 2, 2, 2))
 
 for (i in 1:dim(t_stack_data)[2]) {
   hist(t_stack_data[, i], nclass=50, main = colnames(t_stack_data)[i], xlab="")
 }
 
+# # Set up the figure to have 2 rows and 3 columns
+# par(mfrow = c(4, 3))
+# 
+# #Looking to solve the error of figure margins 
+# par(mar = c(2, 2, 2, 2))  # Modify figure margins
+# 
+# # plot first 2 rows 
+# plot_list <- list()
+# for (i in 1:dim(stack_data)[2]) {
+#   hist(stack_data[, i], nclass=50, main = colnames(t_stack_data)[i], xlab="")
+# #  plot_list[[i]] <- recordPlot()  # Store the plot for later use
+# }
+# 
+# # Now record the plotting of the 6 updated histograms
+# for (i in 1:dim(t_stack_data)[2]) {
+#  hist(t_stack_data[, i], nclass=50, main = colnames(t_stack_data)[i], xlab="")
+# # plot_list[[j+i]] <- recordPlot()  # Store the plot for later use
+#}
 ```
-\newpage
-\FloatBarrier
 
 # Cluster exploration
 
-The number of clusters is informed by a scree plot (Figure 3). This plot compares the total within-cluster sum of squares (TWSS) for an increasing number of clusters. Scree plots show how the TWSS is reduced with each additional cluster. The optimal number of clusters is found near the elbow in the data (i.e., the point beyond which the reduction of TWSS becomes small with each additional cluster.
+The number of clusters is informed by a scree plot (Figure 4). This plot compares the total within-cluster sum of squares (TWSS) for an increasing number of clusters. Scree plots show how the TWSS is reduced with each additional cluster. The optimal number of clusters is found near the elbow in the data (i.e., the point beyond which the reduction of TWSS becomes small with each additional cluster.
 
-```{r ScreePlot,  warning=FALSE, message=FALSE, echo=FALSE, fig.cap="Scree plot showing the total within sum-of-squares across a range of cluster numbers."}
+```{r Fig4_ScreePlot, warning=FALSE, message=FALSE, echo=FALSE, fig.pos='t', fig.cap="Scree plot showing the total within sum-of-squares across a range of cluster numbers."}
 plotme
 ```
 
-Repeated scree plots generated using subsamples (n=50,000) of complete cases provide more information than a scree plot of all the data. Based on a manual assessment of repeated plots, the number of clusters before the breakpoint varied between 6 and 10. The scree plot of all the data breaks at 8 (Figure 3).
+Repeated scree plots generated using subsamples (n=50,000) of complete cases provide more information than a scree plot of all the data. Based on a manual assessment of repeated plots, the number of clusters before the breakpoint varied between 6 and 10. The scree plot of all the data breaks at 8 (Fig. X).
 
-Heat maps of the cluster standard deviations (Figure 4) show how the various predictor values are distributed among the clusters. 
-```{r HeatMap, warning=FALSE, message=FALSE, echo=FALSE, fig.cap="Heat map showing within cluster standard deviation of the predictors.", fig.show='asis', fig.align='center',fig.width=6, fig.height=4}
+```{r HeatMap, warning=FALSE, message=FALSE, echo=FALSE, fig.pos='t', fig.cap="Heat map showing within cluster standard deviation of the predictors."}
 z_heat
 ```
 
-Silhouette plots show the width of the clusters and the total number of values (i.e., pixels) within each (Figure 5). Higher average silhouette width indicates a better fit with the number of clusters. 
-```{r SilhouettePlot, warning=FALSE, message=FALSE, echo=FALSE, fig.cap="Silhouette plot showing pixel membership in each cluster and silhouette widths.", figure.placement='H', fig.align='center',fig.width=6, fig.height=4}
-par(mar = c(5, 2, 0, 2)) 
-plot(sk, col = 1:nclust, border=NA, main = "" )
+
+```{r SilhouettePlot, warning=FALSE, message=FALSE, echo=FALSE, fig.pos='t', fig.cap="Silhouette plot showing pixel membership in each cluster and silhouette widths."}
+plot(sk, col = 1:nclust, border=NA )
 ```
 
-\newpage
+
 ## Part 2 - Clusters and predictor loadings
-While exercising the cluster analysis, northness was found to contribute equally to the clusters regardless of number of clusters. It was dropped to simplify the analysis. 
+While exercising the cluster analysis, two things were noted about the predictors: first, the contribution of the rei and freshwater_index to the clusters was often uniform (similar across clusters), regardless of number of clusters (Fig X); and second, the freshwater_index often pulled in the same direction as tidal mean summer (Fig. Y). 
 
-The PCA plots (Figure 6, Figure 7) show how the clusters are distributed across the first two (Figure 7) and second two (Figure 8) dimensions.
+The freshwater_index was dropped as a predictor at this point, leaving 6 predictors. 
 
-The loadings are quantified in Table 5, and shown graphically in Figure 8. 
 
-\FloatBarrier
-```{r PCATable, warning=FALSE, message=FALSE, echo=FALSE}
+First we do PCA plots and then we show loadings as violin plots. 
 
-loads <- round( pca_results$loadings$rotation, 3 )
-knitr::kable( loads, format = "latex", booktabs = TRUE, 
+```{r Fig7_PCAPlot1, warning=FALSE, message=FALSE, echo=FALSE, fig.pos='t', fig.cap="PCA Plots showing the clusters across the first and second dimensions."}
+plot( pca_results$plot1 )
+```
+
+```{r PCAPlot2, warning=FALSE, message=FALSE, echo=FALSE, fig.pos='t', fig.cap="PCA Plots showing the clusters across the third and fourth  dimensions."}
+plot( pca_results$plot2 )
+```
+
+
+
+Impressions of how the clusters are formed ... 
+
+```{r PCATable, warning=FALSE, message=FALSE, echo=FALSE, table.pos='t', tab.cap="Loadings on the principal components by the selected predictor variables."}
+
+knitr::kable( pca_results$loadings$rotation, format = "latex", booktabs = TRUE, 
               caption = "Correlation matrix for assessing predictor cross-correlations") %>%
   kable_styling( latex_options = c("scale_down") )
 
 ```
 
-\newpage
-```{r PCAPlot1, warning=FALSE, message=FALSE, echo=FALSE, fig.cap="PCA Plots showing the clusters across the first and second dimensions.", fig.pos='t', fig.align='center',fig.width=6.5, fig.height=3.7}
-par(mar = c(0, 0, 0, 0)) 
-plot( pca_results$plot1 )
-```
+Impressions of how the lower dimensions of the PCA contribute ... 
 
-```{r PCAPlot2, warning=FALSE, message=FALSE, echo=FALSE, fig.cap="PCA Plots showing the clusters across the third and fourth dimensions.", fig.pos='b', fig.align='center', fig.width=6.5, fig.height=3.7}
-par(mar = c(0, 0, 0, 0)) 
-plot( pca_results$plot2 )
-```
-
-```{r ViolinPlot, warning=FALSE, message=FALSE, echo=FALSE, fig.cap="Violin plots showing distribiton of predictors in each of the k-means clusters."}
+```{r ViolinPlot, warning=FALSE, message=FALSE, echo=FALSE, fig.pos='t', fig.cap="Violin plots showing distribiton of predictors in each of the k-means clusters."}
 vplots
 ```
 
-<!-- Next Step: Include the corresponding TIF, rotated and full page! -->
+What beautiful violins. 
 
 
+A table of loadings should also be here. 
 
-<!-- THE END -->
+
+\newpage
+# Addendums
+
+## R packages
+
+dplyr: A fast, consistent set of tools for working with data frame like objects, both in memory and out of memory.  
+
+ggplot2: A system for 'declaratively' creating graphics based on ``The Grammar of Graphics''. You provide the data, tell 'ggplot2' how to map variables to aesthetics, what graphical primitives to use, and it takes care of the details. 
+Hmisc: Contains many functions useful for data analysis, high-level graphics, utility operations, functions for computing sample size and power, simulation, importing and annotating datasets,
+imputing missing values, advanced table making, variable clustering, character string manipulation, conversion of R objects to LaTeX and html code, and recoding variables. Used here to add standard deviation to as lines to ggplot.
+
+knitr: Provides a general-purpose tool for dynamic report generation in R using Literate Programming techniques. Used here for Markdown formatting as html or pdf.
+
+lubridate : Functions to work with date-times and time-spans: fast and user friendly parsing of date-time data, extraction and updating of components of a date-time (years, months, days, hours, minutes, and seconds), algebraic manipulation on date-time and time-span objects. Used here to pool dates to month.
+
+markdown: R Markdown allows the use of knitr and Pandoc in the R environment. This package translates R Markdown to standard Markdown that knitr and Pandoc render to the desired output format (e.g., PDF, HTML, Word, etc).
+
+purrr: A complete and consistent functional programming toolkit for data manupulation in R.  
+
+readxl: Imports excel files into R.  
+
+reshape2: Flexibly restructure and aggregate data using just two functions: melt and 'dcast'. Used here for ggplot() support. 
+
+tibble: Functions for manipulating the tibble data format in R. Used here for the deframe() function.  
+
+vegan: Ordination methods, diversity analysis and other functions for community and vegetation ecologists.  
+
+
