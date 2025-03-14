@@ -107,9 +107,13 @@ The loaded data are saved to .RData files so the loading process does not have t
 
 # Results 
 
-## Data description
+## Data import and description
+
+The newly provided SST temperature data (mean, max, and sd) derived from the July 2023? Sentinel data required re-sampling, as the tifs exported from the GDB were somehow different from the earlier MSEA tifs. The specific error ("Different extent") is from the compareRaster() function, called when trying to add a clipped SST layer to the predictor raster stack. However, digging in shows that the extents are identical. Something else in the file details? The solution was to re-sampled the SST onto a different raster frame. 
+
 
 The loaded Raster stack is `r dim(selected_stack)[1]` by `r dim(selected_stack)[2]`, giving a total of `r scales::comma( dim(selected_stack)[1] * dim(selected_stack)[2])` pixels in the study domain. Much of this area is land, or deeper waters excluded by the bathymetry.
+
 
 *Include: proportion nearshore, proportion of that with good substrate, and final sample size for clustering.* 
 

@@ -14,7 +14,7 @@
 # check for any required packages that aren't installed and install them
 required.packages <- c( "ggplot2", "reshape2", "tidyr","dplyr", "raster", "stringr", "rasterVis",
                         "RColorBrewer", "factoextra", "ggpubr", "cluster", "rmarkdown","lubridate",
-                        "knitr", "tinytex", "kableExtra", "e1071")
+                        "knitr", "tinytex", "e1071", "magrittr", "kableExtra")
 
 # "diffeR", "vegan", "ranger", "e1071", "forcats", "measures", "caret", "PresenceAbsence"
 # "randomForest", "spatialEco", "xlsx", "robustbase", "biomod2", "sp", "magrittr", "tinytex", "rmarkdown", "binr", 'gwxtab'
@@ -38,11 +38,9 @@ spat_ref <- '+proj=aea +lat_1=50 +lat_2=58.5 +lat_0=45 +lon_0=-126 +x_0=1000000 
 #===================================== Functions =========================================
 
 #---- Loads predictors from specified subdirectory -----
-# "add_km_dat" adds the SST values from Sentinel
+# "add_km_dat" adds the SST values from Sentinel 
 LoadPredictors <- function( pred_dir, add_km_dat ){
 
-  
-  pred_dir <- raster_dir
   # Collect and show the filenames in the source directory ...   
   raster_list <- list.files(path = pred_dir, pattern = '\\.tif$', full.names = TRUE)
   print( raster_list )
@@ -58,7 +56,7 @@ LoadPredictors <- function( pred_dir, add_km_dat ){
     raster_list <- raster_list[ -sst_idx ] 
   }
 
-  min_extents <- CalcMinExtents(pred_dir)
+  min_extents <- CalcMinExtents(raster_list)
   raster_stack <- raster::stack()
     
   for (i in 1:length(raster_list)) { #This will loop 3 less if adding SST 
@@ -121,12 +119,11 @@ MakeMoreNormal <- function( the_stack ){
   return( the_stack) 
 }
 
-# Calculate the minimum extents for the rasters in the raster directory. 
-# This is applied to all the rasters and sets the extents of the clustering data
-CalcMinExtents <- function( rasdir ){
-  
-  raster_list <- list.files(path = rasdir, pattern = '\\.tif$', full.names = TRUE)
-  
+# The minimum extents of the clustering data
+# 2025/03/14: Now looks at raster list, not the directory.
+# (old Calculate the minimum extents for the rasters in the raster directory.)
+CalcMinExtents <- function( raster_list ){
+
   xmins <- ymins <- xmaxs <- ymaxs <- NULL
   for (i in 1:length( raster_list )){
     xtents <- extent( raster( raster_list[i] ))

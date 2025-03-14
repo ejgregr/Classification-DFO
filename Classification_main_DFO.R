@@ -1,5 +1,5 @@
 #################################################################################
-# Script:  Broughton_main_DFO.R - DFO CLASSIFICATION VERSION
+# Script:  Classification_main_DFO.R - CLASSIFICATION DFO VERSION
 # Created: February 2024. EJG
 # 
 # This script sources the necessary libraries and functions, coordinates the 
@@ -8,7 +8,7 @@
 # Seems straightforward. :)
 #
 # Updates: 
-# 2024/04/29: Steady development past few weeks; alll necessary pieces now developed. 
+# 2024/04/29: Steady development past few weeks; all necessary pieces now developed. 
 # 2024/04/29: Git repo created and working version pushed prior to RMarkdown development.
 # 2024/05/02: Completed smoothing pass thru code; sorted raster plotting. Pushed.
 # 2024/05/07: Another pass thru, adding some controls. Ready for RMD work.Pushed.
@@ -24,7 +24,7 @@
 # 2024/10/02: Update RMD based on findings from LSSM work. 
 
 # To Do:
-#   Find where we document what happened to FW index
+#   Find where we document what happened to FW index (it was dropped cuz of PCA plots)
 #   Include the updated names (or maybe not?
 #   See about gap statistics and fix the transformation table)
 
@@ -44,7 +44,7 @@ data_dir   <- 'C:/Data/Git/classification-DFO/Data'
 results_dir<- 'C:/Data/Git/classification-DFO/Results' 
 
 # Processing FLAGS...
-loadtifs <- F # If true the data will be re-loaded from TIFs, else it will be loaded from rData.
+loadtifs <- T # If true the data will be re-loaded from TIFs, else it will be loaded from rData.
 clipdata <- T # If true a spatial subset of the data will be taken based on a polygon shape file. 
 reclust  <- T # If true, re-cluster full data set prior to mapping, else predict to unclassified pixels.
 addKmDat <- T
@@ -84,8 +84,8 @@ if (loadtifs) {
 #  load( paste0( data_dir, '/tifs_DFO_scaled_QCS_2024-09-05.rData' ))
 #  load( paste0( data_dir, '/tifs_DFO_centred_QCS_2024-09-05.rData' ))
 
- load( paste0( data_dir, '/tif_stack_2024-10-02.rData' ))
-#  load( paste0( data_dir, '/t_stack_data_2024-09-14.rData' ))
+ load( paste0( data_dir, '/tif_stack_2025-03-14.rData' ))
+#  load( paste0( data_dir, '/t_stack_data_2024-10-02.rData' ))
 }
 
 
@@ -114,19 +114,17 @@ plot( selected_stack )
 histogram(selected_stack, nclass=50)
 
 # Prepare the data for classification.
-if (scaledat) {
-  
-  print( "Transforming data  ... ")
-  # REMOVE fix some (hard-coded) distributions by adding ceilings and root transforms.
-  t_stack_data <- MakeMoreNormal( stack_data )
-  
-  print( "Centering and scaling  ... ")
-  tmp_stack <- scale( t_stack_data, center=T,  scale=T )
-  t_stack_data <- tmp_stack
-  print('Data prepped.')
-  save( t_stack_data, file = paste0( data_dir, '/t_stack_data', today, '.rData' ))
-  print('Scaled data saved.')
-}
+print( "Transforming data  ... ")
+# REMOVE fix some (hard-coded) distributions by adding ceilings and root transforms.
+t_stack_data <- MakeMoreNormal( stack_data )
+
+print( "Centering and scaling  ... ")
+tmp_stack <- scale( t_stack_data, center=T,  scale=T )
+t_stack_data <- tmp_stack
+print('Data prepped.')
+save( t_stack_data, file = paste0( data_dir, '/t_stack_data', today, '.rData' ))
+print('Scaled data saved.')
+
 
 ### Histograms of unscaled and scaled vars in the RMD. 
 
@@ -314,10 +312,13 @@ writeRaster( cluster_raster, paste0( results_dir, out_tif_fname ), overwrite=TRU
 # To PDF:
 # the tinytex library is necessary for compiling the .tex file to be rendered.
 # then run >tinytex::install_tinytex()
+library( kableExtra)
+
 rmarkdown::render( "Classification_DFO_PDF.Rmd",   
                    output_format = 'pdf_document',
                    output_dir ="C:/Data/Git/Classification-DFO/Results",
                    output_file = paste0( "MSEA_gdata_5cluster_", today ))
+
 
 #---- Some details on correlation analysis ... ----
 #---- Correlation across UN-scaled datalayers ----
