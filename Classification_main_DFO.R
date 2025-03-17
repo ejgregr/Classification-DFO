@@ -44,10 +44,10 @@ data_dir   <- 'C:/Data/Git/classification-DFO/Data'
 results_dir<- 'C:/Data/Git/classification-DFO/Results' 
 
 # Processing FLAGS...
-loadtifs <- T # If true the data will be re-loaded from TIFs, else it will be loaded from rData.
+loadtifs <- F # If true the data will be re-loaded from TIFs, else it will be loaded from rData.
 clipdata <- T # If true a spatial subset of the data will be taken based on a polygon shape file. 
 reclust  <- T # If true, re-cluster full data set prior to mapping, else predict to unclassified pixels.
-addKmDat <- T
+addKmDat <- T # Needed for the Sentinel SST tifs
 
 #---- Part 1 of 3: Load, clean, and prepare predictor data.  ----
 # If loadtifs == TRUE then run all this else load the processed data.
@@ -88,63 +88,99 @@ if (loadtifs) {
 #  load( paste0( data_dir, '/t_stack_data_2024-10-02.rData' ))
 }
 
+#---- Dynamic working area ----
 
-#---- Final data preparation ----
+# Drop substrate and bathymetry as their role is done. 
+sub_stack <- dropLayer( tif_stack, c("bathymetry", "SUBSTRATE" ))
 
-# Quick correlation across data layers
+names( sub_stack )
+dim(   sub_stack )
+# RENAME loaded predictors for standard readability
+new_names <- c("circ_mean_summer", "freshwater_index", "RCSI", "REI",
+               "rugosity", "salt_mean_summer", "salt_range", "SD_slope", 
+               "tidal_mean_summer", "sst_max", "sst_mean", "sst_sd")
+names(sub_stack) <- new_names
+
+
 #-- Move to matrix space from raster space 
-x <- getValues( tif_stack )
-#-- Use only pixels with all data
-x_clean <- x[ complete.cases(x), ]
+x <- getValues( sub_stack )
+#-- Identify and  only pixels with all data
+clean_idx <- complete.cases( sub_stack )
+x_clean <- x[ clean_idx, ]
 
-cor_table <- cor( x_clean )
-cor_table[lower.tri(cor_table)] <- NA
-(cor_table >= 0.6) & (cor_table != 1)
+
+#---- Correlations and predictor selection ----
+
+#---- Compare rugosity and SD slope ----
+# RUGOSITY is a bit of a problem predictor.
+range( x_clean[,'rugosity'])
+r <- x_clean[,'rugosity']
+
+range( x_clean[,'SD_slope'])
+s <- x_clean[,'SD_slope']
+
+# par(mfcol=c(1,2))
+# par(mar=c(4,4,3,1) )
+# hist( log(1+(r-1)*1000000), nclass=50, main="Transformed rugosity", xlab = "log( (r-1) * 1xe6)")
+# hist( log(s), nclass=50, main="Transformed SD of slope", xlab = "log(s)")
+
+x_clean[,'rugosity'] <- log(1+(r-1)*1000000)
+
+x_clean <- x_clean[, -which(colnames(x_clean) == "SD_slope")]
+head(x_clean)
+
+
+#---- Correlation across data layers ----
+cor_table <- round( cor( x_clean ), 3)
+cor_table[lower.tri(cor_table, diag=TRUE)] <- NA
+
+high_rows <- apply(cor_table, 1, function(row) any(row > 0.6, na.rm = TRUE))
+z <- cor_table[ high_rows, ]
+
 #--> cor_table prepared for printing in the RMD script.
+#--> See RMD doc for explanation of dropping other predictors. 
 
-#-- Remove correlated layers from raster stack
-selected_stack <- dropLayer( tif_stack, c("bathymetry", "SUBSTRATE", "qcs_freshwater_index", "salinity_range", "temp_mean_summer", "circ_mean_summer",
-                                    "sst_sentinel_20m_bi_mean", "sst_sentinel_20m_bi_sd") )
-stack_data <- getValues( selected_stack )
-
+#-- Final removal of correlated or otherwise no good layers from stack data matrix 
+x_clean <- x_clean[, !colnames(x_clean) %in% c("tidal_mean_summer", "sst_mean", "sst_sd")]
+head(x_clean)
+                           
+                         
 #-- Visualize unmodified source raster data
-dim( selected_stack )
-names( selected_stack )
-plot( selected_stack )
-histogram(selected_stack, nclass=50)
+dim( x_clean )
+colnames( x_clean )
+
+par(mfrow = c(3,3) )
+par(mar=c(3,2,2,1) )
+for (i in seq_along(colnames( x_clean ))) {
+  hist(x_clean[, i], 
+       main = colnames(x_clean)[i],
+       xlab = '', ylab = '',
+       col = "steelblue", border = "white") }
+
 
 # Prepare the data for classification.
 print( "Transforming data  ... ")
-# REMOVE fix some (hard-coded) distributions by adding ceilings and root transforms.
-t_stack_data <- MakeMoreNormal( stack_data )
+
+# Fix some (hard-coded) distributions by adding ceilings and root transforms.
+tx_clean <- MakeMoreNormal( x_clean )
 
 print( "Centering and scaling  ... ")
-tmp_stack <- scale( t_stack_data, center=T,  scale=T )
-t_stack_data <- tmp_stack
+tx_clean <- scale( tx_clean, center=T,  scale=T )
 print('Data prepped.')
-save( t_stack_data, file = paste0( data_dir, '/t_stack_data', today, '.rData' ))
+save( tx_clean, file = paste0( data_dir, '/tx_clean_scaled_', today, '.rData' ))
 print('Scaled data saved.')
 
 
-### Histograms of unscaled and scaled vars in the RMD. 
-
-# Compare pre-post skew? Put it on the histograms? :)
-# RENAME variables after selection for plot prettiness.
-
-new_names <- c("bathymetry", "substrate", "standard_dev_slope, arc-chord rugosity",
-               "circ_mean_summer, tidal_mean_summer", "freshwater_index, salt_mean_summer, 
-               salt_range", "rei", "sentinel_max, sentinel_mean, sentinel_sd, temp_mean_summer, temp_range")
+# Histograms of unscaled and scaled vars in the RMD. 
+#--> Put skews on the histograms?
 
 
-# remove any rows with an NA
-# NB: This decouples the data from the RasterStack and requires re-assembly for mapping
-# THESE are the two key data structures used in subsequent steps
-clean_idx <- complete.cases(t_stack_data)
-stack_data_clean <- t_stack_data[ clean_idx, ]
-
-dim( stack_data )
-dim( stack_data_clean )
-
+#---- Subset the stack data so it corresponds to tx_clean. ----
+# NB: The data have been decoupled from the RasterStack, and will require re-assembly for mapping
+# dim( sub_stack )
+# sub_stack_clean <- sub_stack[ clean_idx ]
+# dim( sub_stack_clean )
+rm( "sub_stack_clean")
 
 #---- Part 2 of 3: Cluster number selection ----
 
@@ -157,7 +193,7 @@ imax     <- 25 # maximum iterations to try for convergence
 
 nclust   <- 18 # number of clusters for scree plot
 nsample  <- 50000 # Scree plot needs a subsample to run reasonably. 
-plotme <- MakeScreePlot( stack_data_clean, nclust, randomz, imax, nsample )
+plotme <- MakeScreePlot( tx_clean, nclust, randomz, imax, nsample )
 plotme
 
 #---- Create a working set of N clusters (N based on scree plot) to further assess cluster number. ----
@@ -165,8 +201,8 @@ plotme
 nclust  <- 5 # the number of clusters based on scree plot, above.
 nsample <- 500000 # a larger sample for more robust classification
 
-sidx <- sample( 1:length( stack_data_clean[ , 1] ), nsample )
-samp <- stack_data_clean[ sidx, ]
+sidx <- sample( 1:length( tx_clean[ , 1] ), nsample )
+samp <- tx_clean[ sidx, ]
 cluster_result <- kmeans(samp, centers=nclust, nstart=randomz, iter.max=imax) 
 
 #---- Part 2b: Create heat map of within-cluster standard deviations ----
@@ -210,7 +246,7 @@ sk <- silhouette(cs, c_dist)
 #mean( sk[,"sil_width"] )
 
 par(mfrow = c(1, 1))
-plot(sk, col = 1:nclust, border=NA, main = "Hi World" )
+plot(sk, col = 1:nclust, border=NA, main = "Silhouette plot across clusters" )
 
 
 #---- Part 3 of 3: Detailed examination of N clusters  ----
@@ -220,7 +256,7 @@ plot(sk, col = 1:nclust, border=NA, main = "Hi World" )
 pca_n <- 25000
 
 #Returns a list of results (loadings table, and 2 plots)
-pca_results <- ClusterPCA( pca_n, nclust ) # uses global variable stack_data_clean
+pca_results <- ClusterPCA( tx_clean, pca_n, nclust ) # uses global variable stack_data_clean
 names(pca_results) <- c("loadings", "plot1","plot2")
 
 #Percentage of variance explained by dimensions
@@ -259,14 +295,14 @@ vplots
 out_tif_fname <- paste0( '/MSEA_gdata_5cluster_', today, '.tif' )
 
 # initialize target data structure 
-cluster_raster <- selected_stack[[1]]
+cluster_raster <- sub_stack[[1]]
 dataType(cluster_raster) <- "INT1U"
 cluster_raster[] <- NA
 
 if (reclust == T) {
   # Re-cluster using all the clean data  ... 
   # less than 1 min with iter.max = 20, nstart = 20 for smallest region
-  cluster_result <- kmeans(stack_data_clean, centers = nclust, nstart = randomz, iter.max = imax)
+  cluster_result <- kmeans(tx_clean, centers = nclust, nstart = randomz, iter.max = imax)
   
   # Assign the clustered values ... 
   # extract values from the target cluster
@@ -327,12 +363,6 @@ rmarkdown::render( "Classification_DFO_PDF.Rmd",
 # pick <- sample( 1:length( foo_clean[ , 1] ), 10000 )
 # plot( foo_clean[ pick,'rugosity'] ~ foo_clean[ pick,'standard_deviation_slope'] )
 
-# RUGOSITY is a bit of a problem distribution
-#cellStats( data_layers$rugosity, stat="range" )
-#raster::hist(log( data_layers$rugosity+10 ), nclass=50)
-# Look at bottom roughness relationships  
-#pick <- sample( 1:length( stack_data_clean[ , 1] ), 10000 )
-#plot( stack_data_clean[ pick,'rugosity'] ~ stack_data_clean[ pick,'standard_deviation_slope'] )
 
 #---- 
 

@@ -1,5 +1,5 @@
 ---
-title: "Coastal clusters for the Local Seaweed Services Model"
+title: "Prototype clustering approach for the BC nearshore environment"
 author: "Edward Gregr"
 date: "`r format(Sys.Date(), '%B %d, %Y')`"
 output:
@@ -31,33 +31,36 @@ header-includes:
 \newpage
 
 # Introduction
-Relatively little is known about nearshore benthic habitat types and associated marine benthic invertebrate and algal communities along the BC coast, as DFO is focused mainly on species of commercial interest. Benthic habitat types and community composition of the nearshore region are large data gaps that need to be addressed to support marine use planning initiatives. In the absence of an empirical representation for data-poor species, there is a need to have a proxy representing areas of similar environmental conditions to use as a framework to collate existing information on the distribution of kelp and other nearshore benthic species. 
+Relatively little is known about nearshore marine benthic habitat and associated invertebrate and algal communities along the BC coast. This is due to a research focus mainly on species of commercial interest. Nearshore, benthic habitat types and community composition are large data gaps that need to be addressed to support marine use planning initiatives. In the absence of any meanningful empirical representation for data-poor species, there is a need for a proxy to represent areas with similar environmental conditions, and provide a framework for collating existing information on the distribution of kelps and other nearshore benthic species. 
 
-This project delivers an approach, implemented in R scripts, to use the k-means unsupervised clustering algorithm to generate clusters representing areas of common environmental conditions from existing spatial layers. Deliverables include a variety of spatial clusters for the Queen Charlotte Strait (QCS) ecoregion, and well-documented R scripts to create the layers. The scripts include an RMarkdown file which produces a PDF report of the results. This allows for efficient comparisons of different cluster formulations. Comparisons and judgements are an essential part of the process, as results vary with different data sets, their distribution, and the number of clusters requested.
+This report describes an approach, implemented in R scripts, to use the k-means unsupervised clustering algorithm to generate clusters of common environmental conditions. Deliverables include a suggested spatial clustering for the Queen Charlotte Strait (QCS) ecoregion, based on existing spatial layers,  well-documented R scripts to load, prepare, and cluster the source data, and this summary report. This report is created using an RMarkdown file, and contains diagnostics to support the efficient comparisons of different cluster formulations. Comparison and judgement are an essential part of the process, as the clusters are sensitive to different source data sets, their numeric and spatial distributions, and the number of clusters requested.
 
-The clustering scripts rely on TIF files provided by the Marine Spatial Ecology & Analysis (MSEA) section. The code assumes the TIFs are in the same projection, but imposes a common extent and resolutionto ensure all inputs have identical spatial configurations. 
+The clustering scripts rely on TIF files provided by the Marine Spatial Ecology & Analysis (MSEA) section. The code assumes the TIFs are in the same projection, but imposes a common extent and resolution to ensure all inputs have the same spatial configurations. 
 
 ## Background   
 
 ## K-means classification
-Standard K-means clustering works by minimizing the Euclidean distance between data points and cluster centroids. It is designed for continuous numeric data, and is described as sensitive to the 'shape' of those data (e.g., range, distribution). Much attention was therefore paid to outliers and skewness. All predictors were transformed if warranted, then centered and scaled to ensure all predictors contribute equally.
+Standard K-means clustering works by minimizing the Euclidean distance between data points and cluster centroids. The use of Euclidean distance means that k-means is very sensitive to outliers, will strive for clusters uniform in size, and assumes data points in each cluster form a sphere around each centroid (KDnuggets 2024). Further, as it is designed for continuous numeric data, it is also described as sensitive to the 'shape' of those data (e.g., range, distribution). 
+Much attention was therefore paid to outliers and skewness: all predictors were transformed if warranted, then centered and scaled to ensure they contribute equally.
 
-Euclidean distance also means that k-means will strive for clusters of uniform in size, is very sensitive to outliers, assumes that data points in each cluster form a sphere around each centroid (KDnuggets 2024). 
-Categorical variables cannot be directly used in standard K-means clustering as they do not have a meaningful Euclidean distance. While methods for mixed data exist (e.g., in the R cluster package), the clustering on non-Euclidean distances is more time consuming. Thus, these methods have limits on the size of the data (e.g., the pam() algorithm is limited to 65,000 observations). Given that the QCS study area contains over 17,000,000 valid pixels structuring a re-sampling analysis using these tools was deemed out of scope.
-Guidance on selecting the appropriate number of clusters include examining the within sum of squares, average silhouette width, gap analysis, and the separation of the clusters (via Principal Component Analysis).
+Categorical variables cannot be directly used in standard K-means clustering as they do not have a meaningful Euclidean distance. While methods for mixed data exist (e.g., in the R cluster package), the clustering on non-Euclidean distances is more time consuming, thus limiting the size of the data these methods can handle (e.g., the pam() algorithm is limited to 65,000 observations). Given that the QCS study area contains over 17,000,000 valid pixels, consstructing a re-sampling approach to enable non-Euclidian clustering was deemed out of scope.
+
+Decisions on selecting the appropriate variables and the number of clusters can be informed by examining the within sum of squares, average silhouette width, gap analysis, and the separation of the clusters (via Principal Component Analysis).
 
 # Methods
 Examples of clusters were generated across three spatial extents to illustrate how results change with extent and data quality: The full Queen Charlotte Strait (QCS) 'data' region, a reduced area with higher data quality, and a local area in the Broughton Archipelago.
 
-As k-means clustering is sensitive to the scale and shape of the input data, predictors are examined for normality, transformed if necessary, and standardized. Scaling and centering are commonly applied to improve the shape of the data. However, these methods assume normally distributed data. If the data are skewed, the leverage of outliers is enhanced. The predictors are therefore first examined for skewness (the symmetry of a distribution). A skewness value between -1 and +1 can be considered normal, and -2 to +2 is acceptable. Larger Values suggest substantial nonnormality. Kurtosis is a related metric but was not examined. The predictors are checked for outliers prior to assessing the skewness and a ceiling (or floor) is applied to pull outliers in if desired.  
+Predictors are commonly scaled and centred to improve the shape and comparability of the predictor data. In addition,  if the predictors are skewed, the leverage of outliers is enhanced. The r-scripts thus provide the means to test for normality and examine range. Transformations for skew and clips to remove outliers are applied (and hard-coded) as necessary, prior to scaling and centering.
 
-Transforms can be applied to normalize highly skewed distributions. The data are then centered (by subtracting their means) using the base scale() function in R. Centering the data helps standardize their contributions to the clusters (REF). Finally, scaling (also termed standardization or z-score normalization) centered data further transforms the data so it has a mean of 0 and a standard deviation of 1. This process ensures all variables have the same range. 
+The predictor distributions are checked for outliers prior to assessing for skewness. A ceiling (or floor) is applied to pull outliers in if desired. The range-checked predictors are then examined for skewness (the symmetry of a distribution). A skewness value between -1 and +1 can be considered normal, and -2 to +2 is acceptable. Larger Values suggest substantial nonnormality. Transforms can be applied to normalize highly skewed distributions. Kurtosis is a related metric but was not examined.
 
-Correlations are examined and Where predictors are cross-correlated > 0.6, one of them is removed.
+The data are then centered (by subtracting their means) using the base scale() function in R. Centering the data helps standardise their contributions to the clusters (REF). Finally, scaling (also termed standardization or z-score normalization) the centered data ensures all predictors have a mean of 0 and a standard deviation of 1.
+
+Correlations are examined for the prepared predictors and where predictors are cross-correlated > 0.6, one of them is removed.
 
 Clusters are generated from samples, as the data can be quite large. If samples are used, this can lead to the emergence of different clusters unless, as here, a seed is specified. However, the clusters still end up different each time as the algorithm itself chooses a new starting point at random for each cluster whenever its run. 
 
-The working cluster is then examined in a variety of ways including:
+The working cluster is then examined using:
 1.	A heat map of the within cluster sum of squares. 
 2.	Silhouette plots of the clusters 
 Silhouette plots provide information on how observations fit their clusters. Generally, the higher the average width of each clusters the better. 
@@ -70,7 +73,9 @@ Silhouette plots provide information on how observations fit their clusters. Gen
 
 # Data preparation
 In discussions with the Project Manager, the layers of interest (Table 1) were chosen to reflect the best available coast-wide coverage at a resolution of 20x20 m2. Recent work on classifying substrate (Gregr et al. 2019) and species distribution (Nephin et al. 2016) has been based on this spatial framework, and the various layers are regularly updated by DFO. The data were provided by DFO as TIF files and were loaded directly into R. 
+
 Rasters are all assumed to have the same projection and resolution. As part of the data loading process, the rasters are standardized to the combined minimum spatial extents to resolve any differences in spatial extents. The coastwide Sentinel SST data were re-sampled onto the same spatial reference. 
+
 After loading, the data are optionally clipped to a portion of the QCS ecoregion. This was useful for removing areas with poor data in the northern portion (i.e., Belize Inlet and area), and for comparing predictor contributions at different spatial extents. 
 
 ```{r, DescripTable, echo=FALSE, escape=FALSE}
@@ -78,15 +83,15 @@ library(knitr)
 
 descrip_table <- data.frame(
   Process = c("Light, Energy", "Bottom type", "Roughness", "Circulation", "Salinity", "Relative exposure index",  "Temperature"),
-  Predictor = c("bathymetry", "substrate", "standard_dev_slope, arc_chord_rugosity", "circ_mean_summer, tidal_mean_summer", "freshwater_index, salt_mean_summer, salt_range", "rei", "sentinel_max, sentinel_mean, sentinel_sd, temp_mean_summer, temp_range"),
+  Predictor = c("bathymetry", "substrate", "standard_dev_slope, arc_chord_rugosity", "circ_mean_summer, tidal_mean_summer, RCSI", "freshwater_index, salt_mean_summer, salt_range", "REI", "sentinel_max, sentinel_mean, sentinel_sd"),
   Description = c(
     "Kelps are light-restricted, so depth is crucial for forming clusters in the photic zone. Following Barbosa et al., bathymetry was used to restrict the study to suitable depths, rather than as a classifying variable.",
     "As kelp holdfasts must be attached to hard substrates, substate predictions (Mud, Sand, Mixed, and Hard) from Gregr et al. (2019) were used a description of bottom type - an essential aspect of kelp habitat suitability.", 
     "Bottom roughness can be an indication of rocky reefs where kelps are typically abundant. Various measures exist including arc-chord rugosity, slope of slope, standard deviation of slope, and benthic positioning index. We used the standard deviation of slope from the MSEA 20 m habitat package.",
-    "Derived from the Masson oceanographic model, circ_mean_summer is a proxy for larger water mass movements, while tidal_mean represents diurnal and fortnightly tidal ranges. Together these predictors provide an indication of water flow and nutrient mixing. We used the mean tidal current from the MSEA 20 m habitat package.",
-    "Kelps do better in higher salinity waters, as salinity tends to be correlated with both cooler temperatures and increased nutrients. We used a simple diffusion model developed by MSEA which shows potentially low salinity areas based on point estimates of riverine input (from the BC Freshwater Atlas).",
+    "Derived from the Masson oceanographic model (REF), circ_mean_summer is a proxy for larger water mass movements, while tidal_mean represents diurnal and fortnightly tidal ranges. Together these predictors provide an indication of water flow and nutrient mixing. We used the mean tidal current from the MSEA 20 m habitat package. The relative current speed index (RCSI) is an integrated predictor developed by MSEA intended to integrate nearshore currents from the best available data.",
+    "Kelps do better in higher salinity waters, as salinity tends to be correlated with both cooler temperatures and increased nutrients. We used a simple diffusion model developed by MSEA which shows potentially low salinity areas based on point estimates of riverine input (from the BC Freshwater Atlas - REF).",
     "In addition to influencing substrate, exposure can also indicate mixing, and influence zoospore settlement. This updated relative exposure index (REI) from MSEA includes depth attenuated wave action combined with fetch and dominant winds.",
-    "Kelps are generally understood to do better in cooler waters, with species-specific responses. Surface water temperature Was processed from the Sentinel 3 sensor to create a layer describing the mean and range of sea surface temperature during MONTH, YEAR."
+    "Kelps are generally understood to do better in cooler waters, with species-specific responses. Surface water temperature was processed from the Sentinel 3 sensor to create a layer describing the mean, max, and range of sea surface temperature during MONTH, YEAR."
   )
 )
 
@@ -99,32 +104,34 @@ kable(descrip_table, format = "latex", booktabs = TRUE,
 
 ```
 
-Following Barbosa et al., unsuitable depths are removed from the source data. Not only is this critical for the bathymetry-based roughness layers (as the bathymetry includes upland areas), it also focuses the clustering on the photic zone. Additionally, soft and sand substrate were dropped, leaving mixed and hard as necessary a habitat feature. Since clustering is only done for compete cases, these restrictions define the extent of the classification. Both bathymetry and substrate were thus left out of the k-means clustering.
+Following Barbosa et al., unsuitable depths are removed from the source data by restricting the bathymetry layer. Not only is this critical for the removal of bathymetry-based roughness layers (as the bathymetry includes upland areas), it also focuses the clustering on the photic zone. Soft and sand substrates were also removed using the categorical Substrate layer, leaving mixed and hard as a necessary habitat feature. Since clustering is only done for compete cases, these restrictions define the extent of the classification, leaving both bathymetry and substrate out of the clustering.
 
-The MSEA translation of the 1 km SST data to 20 m resolution contained gaps in the 20 m coverage where the 1 km pixels provided minimal coverage of the coast.
-
-The loaded data are saved to .RData files so the loading process does not have to be repeated during the cluster exploration process. 
+The loaded data are saved to dated .RData files so the loading process does not have to be repeated during the cluster exploration process. 
 
 # Results 
 
 ## Data import and description
 
-The newly provided SST temperature data (mean, max, and sd) derived from the July 2023? Sentinel data required re-sampling, as the tifs exported from the GDB were somehow different from the earlier MSEA tifs. The specific error ("Different extent") is from the compareRaster() function, called when trying to add a clipped SST layer to the predictor raster stack. However, digging in shows that the extents are identical. Something else in the file details? The solution was to re-sampled the SST onto a different raster frame. 
+Fourteen predictors were loaded into the initial raster stack (Table 1). 
 
-
-The loaded Raster stack is `r dim(selected_stack)[1]` by `r dim(selected_stack)[2]`, giving a total of `r scales::comma( dim(selected_stack)[1] * dim(selected_stack)[2])` pixels in the study domain. Much of this area is land, or deeper waters excluded by the bathymetry.
-
+The loaded Raster stack is `r dim(sub_stack)[1]` by `r dim(sub_stack)[2]`, giving a total of `r scales::comma( dim(sub_stack)[1] * dim(sub_stack)[2])` pixels in the study domain. As this is a raster representation, much of this area is land or deeper waters, excluded from the analysis by the bathymetry and substrate layers.
 
 *Include: proportion nearshore, proportion of that with good substrate, and final sample size for clustering.* 
 
 ## Predictor assessment
 
+Arc-chord *rugosity* and *SD_slope* were both examined as candidates for roughness. Arc-chord rugosity is an interesting predictor as it has a very narrow range (`range( x_clean[,'rugosity'])`), with most of the variance at the resolution of of 10e^-3^. To effectively compare this to SD_slope, both predictors were transformed onto a similar range, and the histograms (Fig. A1) and relationship between the two predictors (Fig. A2) were compared. As a result, I chose rugosity as it showed a more normal distribution with more diverse values. 
+
+After dropping bathymetry, substrate, and SD_slope, 11 variables remained. 
+
 ### Cross-correlations
-Arc-chord rugosity (ACR) and *standard_dev_slope* (SDS) were considered. The two were highly (0.66) correlated, so ACR was dropped because of its higher skewness and it's actual representation of only 6 classes (0 to 5+).
+Correlations are first examined across all loaded predictors (Table 2), and correlation values exceeding 0.6 are indentified (Table 3). 
 
-Other correlations exceeding 0.6 within the SDM predictor data included: *temp_range* with both *salinity_range* and *temp_mean_summer*; *tidal_mean_summer* and *circ_mean_summer*; and *sentinel_max* with both *sentinel_mean* and *sentinel_sd*. Based on these correlations, *salinity_range* and *temp_mean_summer* were dropped in favour of *temp_range*, and *tidal_mean_summer* was retained over *circ_mean_summer* in the hope it was more accurate close to shore, and *sentinel_max* was retained from the remote sensing triplet. 
+For this collection of MSEA data, *tidal_mean_summer* was correlated with *circ_mean_summer* at 0.632. Since *tidal_mean_summer* was more correlated with *RCSI*, the intended proxy for coastal water energy, it was dropped, and both *circ_mean_summer* and *RCSI* were retained.
 
-This left 7 variables as potential predictors.
+The only other correlations to exceed 0.6 was the family of Sentinel SST data. *sst_max* was retained and the other two dropped as their correlation with *sst_max* exceeded 0.90.
+
+This left 8 variables as potential predictors.
 
 ```{r Correlations, results='asis', echo=FALSE, table.pos='t' }
 # Caption is part of kable()
@@ -149,23 +156,23 @@ knitr::kable( z, digits = 2, format = "latex", booktabs = TRUE,
 ```
 \newpage
 ## Distributions and outliers
-Skewness scores show strong nonnormality for several predictors. Transforms were applied to *freshwater_index*, *standard_dev_slope*, and *rei_qcs*. For all 3 predictors, ceilings were applied to pull in outliers and power transforms improved the skew (Table X). (**Table 4**). 
+Skewness scores show strong nonnormality for several predictors. Transforms were applied to *freshwater_index* and *rei_qcs*. For both predictors, a ceiling was applied to pull in outliers, and power transforms improved the skew (Table 4).
 
 ```{r SkewTable, results='asis', echo=FALSE, table.pos='t'}
 
 skdat <- data.frame(Predictor = character(), Pre_Skew = numeric(), Post_Skew = numeric(), stringsAsFactors = FALSE)
 
 # Loop through the columns of the dataset
-for (i in 1:ncol(t_stack_data)) {
+for (i in 1:ncol(x_clean)) {
   # Calculate skewness for each column in both datasets
-  pre  <- skewness(stack_data[, i], na.rm = TRUE) 
-  post <- skewness(t_stack_data[, i], na.rm = TRUE) 
+  pre  <- skewness(x_clean[, i], na.rm = TRUE) 
+  post <- skewness(tx_clean[, i], na.rm = TRUE) 
   
   # Combine the column name and skewness values into a new data frame row
   new_row <- data.frame(
-    Predictor = colnames(t_stack_data)[i],  # Get column name
-    Pre_Skew  = round(pre, 3),                     # Skewness before transformation
-    Post_Skew = round(post, 3)                     # Skewness after transformation
+    Predictor = colnames(tx_clean)[i],  # Get column name
+    Pre_Skew  = round(pre, 3),         # Skewness before transformation
+    Post_Skew = round(post, 3)         # Skewness after transformation
   )
   # Append the new row to skdat
   skdat <- rbind(skdat, new_row)
@@ -182,27 +189,32 @@ for (i in 1:ncol(t_stack_data)) {
 
 # Print the resulting data frame
 knitr::kable( skdat, format = "latex", booktabs = TRUE, 
-              caption = "Transforms applied to skewed predictors and the resulting change in skewness.") %>%
+              caption = "Skewness for the predictors selected for clustering, before and after transformation.") %>%
 kable_styling(latex_options = "hold_position")
 
 ```
 
-*REI* was set to a ceiling of 0.3 based on the histogram and the spatial distribution of the data. The highest values are concentrated in the west, and are fully exposed to Queen Charlotte Sound. The ceiling did not group any other location with this region. *Freshwater_index* was set to a ceiling of 0.025 using the same approach; showing the highest values concentrated around the western point of Hardwicke Island in Johnstone Strait. For *standard_dev_slope* a ceiling of 10 was applied, and for *temp_range* we applied only a power transform. 
+*REI* was set to a ceiling of 0.3 based on the histogram and the spatial distribution of the data. The highest values are concentrated in the western portion of the study area, and are fully exposed to Queen Charlotte Sound. The ceiling did not group any other location with this region. The *Freshwater_index* was set to a ceiling of 0.2 using the same approach; grouping the highest values concentrated around the western point of Hardwicke Island in Johnstone Strait.
+
 
 ```{r, echo=FALSE, results='asis'}
 # Create the data frame
 df <- data.frame(
-  Predictor = c("REI", "freshwater_index", "standard_dev_slope", "temp_range"),
-  Ceiling = c(0.3, 0.025, 10, NA),
-  Power_transform = c("1/2", "1/3", "1/2", "1/2")
+  Predictor = c("REI", "freshwater_index"),
+  Ceiling = c(0.3, 0.2),
+  Power_transform = c("1/3", "1/4")
 )
 
 # Render the table using kable with LaTeX format for PDF
-knitr::kable(df, format = "latex", booktabs = TRUE, col.names = c("Predictor", "Ceiling", "Power transform"))
+knitr::kable(df, format = "latex", booktabs = TRUE, 
+          caption = "Transforms applied to skewed predictors.",
+          col.names = c("Predictor", "Ceiling", "Power transform"))  %>%
+kable_styling(latex_options = "hold_position")
 ```
 
-Pre (Figure 1) and post (Figure 2) histograms showing the effects of the transformation and scaling of the data. 
+
 \newpage
+Pre (Figure 2) and post (Figure 3) histograms showing the effects of the transformation and scaling of the data. 
 ```{r preHists, echo=FALSE, fig.pos='h', fig.cap="Histograms of the selected, unmodified predictors.", fig.align='center', fig.width=8, fig.height=3.75}
 
 # fig.pos='H', 
@@ -211,8 +223,8 @@ Pre (Figure 1) and post (Figure 2) histograms showing the effects of the transfo
 # Plot the first group of 8 histograms
 par(mfrow = c(2, 4), mar = c(2, 2, 2, 2))
 
-for (i in 1:dim(stack_data)[2]) {
-  hist(stack_data[, i], nclass=50, main = colnames(stack_data)[i], xlab="")
+for (i in 1:dim(x_clean)[2]) {
+  hist(x_clean[, i], nclass=50, main = colnames(x_clean)[i], xlab="")
 }
 ```
 
@@ -225,8 +237,8 @@ for (i in 1:dim(stack_data)[2]) {
 # Plot the second group of 8 histograms
 par(mfrow = c(2, 4), mar = c(2, 2, 2, 2))
 
-for (i in 1:dim(t_stack_data)[2]) {
-  hist(t_stack_data[, i], nclass=50, main = colnames(t_stack_data)[i], xlab="")
+for (i in 1:dim(tx_clean)[2]) {
+  hist(tx_clean[, i], nclass=50, main = colnames(tx_clean)[i], xlab="")
 }
 
 ```
@@ -249,7 +261,7 @@ z_heat
 ```
 
 Silhouette plots show the width of the clusters and the total number of values (i.e., pixels) within each (Figure 5). Higher average silhouette width indicates a better fit with the number of clusters. 
-```{r SilhouettePlot, warning=FALSE, message=FALSE, echo=FALSE, fig.cap="Silhouette plot showing pixel membership in each cluster and silhouette widths.", figure.placement='H', fig.align='center',fig.width=6, fig.height=4}
+```{r SilhouettePlot, warning=FALSE, message=FALSE, echo=FALSE, fig.cap="Silhouette plot showing pixel membership in each cluster and silhouette widths.", figure.placement='h', fig.align='center',fig.width=6, fig.height=4}
 par(mar = c(5, 2, 0, 2)) 
 plot(sk, col = 1:nclust, border=NA, main = "" )
 ```
@@ -262,33 +274,57 @@ The PCA plots (Figure 6, Figure 7) show how the clusters are distributed across 
 
 The loadings are quantified in Table 5, and shown graphically in Figure 8. 
 
-\FloatBarrier
 ```{r PCATable, warning=FALSE, message=FALSE, echo=FALSE}
 
 loads <- round( pca_results$loadings$rotation, 3 )
 knitr::kable( loads, format = "latex", booktabs = TRUE, 
               caption = "Correlation matrix for assessing predictor cross-correlations") %>%
-  kable_styling( latex_options = c("scale_down") )
+  kable_styling( latex_options = c("scale_down","hold_position") )
 
 ```
 
-\newpage
-```{r PCAPlot1, warning=FALSE, message=FALSE, echo=FALSE, fig.cap="PCA Plots showing the clusters across the first and second dimensions.", fig.pos='t', fig.align='center',fig.width=6.5, fig.height=3.7}
+```{r PCAPlot1, warning=FALSE, message=FALSE, echo=FALSE, fig.cap="PCA Plots showing the clusters across the first and second dimensions.", fig.align='center', fig.width=6.5, fig.height=3.7, fig.pos='h'}
 par(mar = c(0, 0, 0, 0)) 
 plot( pca_results$plot1 )
 ```
 
-```{r PCAPlot2, warning=FALSE, message=FALSE, echo=FALSE, fig.cap="PCA Plots showing the clusters across the third and fourth dimensions.", fig.pos='b', fig.align='center', fig.width=6.5, fig.height=3.7}
+
+\newpage
+
+```{r PCAPlot2, warning=FALSE, message=FALSE, echo=FALSE, fig.cap="PCA Plots showing the clusters across the third and fourth dimensions.", fig.align='center', fig.width=6.5, fig.height=3.7, fig.pos='h'}
 par(mar = c(0, 0, 0, 0)) 
 plot( pca_results$plot2 )
 ```
 
-```{r ViolinPlot, warning=FALSE, message=FALSE, echo=FALSE, fig.cap="Violin plots showing distribiton of predictors in each of the k-means clusters."}
+```{r ViolinPlot, warning=FALSE, message=FALSE, echo=FALSE, fig.cap="Violin plots showing distribiton of predictors in each of the k-means clusters.", fig.pos='h'}
 vplots
 ```
 
 <!-- Next Step: Include the corresponding TIF, rotated and full page! -->
 
+\newpage
+\FloatBarrier
+# Technical appendix
+
+## SST from Sentinel
+The newly provided SST temperature data (mean, max, and sd) derived from the July 2023? Sentinel data required re-sampling, as the tifs exported from the GDB were somehow different from the earlier MSEA tifs. The specific error ("Different extent") is from the compareRaster() function, called when trying to add a clipped SST layer to the predictor raster stack. However, digging in shows that the extents are identical. Something else in the file details? The solution was to re-sampled the SST onto a different raster frame. 
+
+## Arc-chord rugosity vs. standard deviation of slope 
+
+```{r TechFig1, warning=FALSE, message=FALSE, echo=FALSE, fig.cap="Histograms for arc-chord rugosity and standard deviation of slope.", fig.pos='h'}
+
+# r and s defined in main before SD_slope dropped
+par(mfcol=c(1,2))
+par(mar=c(4,4,3,1) )
+hist( log( (r-1)*1000000 ), nclass=50, main="Transformed rugosity", xlab = "log( (r-1) * 1xe6)")
+hist( log(s), nclass=50, main="Transformed SD of slope", xlab = "log(s)")
+```
+
+```{r TechFig2, warning=FALSE, message=FALSE, echo=FALSE, fig.cap="Relationship between arc-chord rugosity and standard deviation of slope in transformed space.", fig.pos='h'}
+par(mfcol=c(1,1))
+pick <- sample( 1:length( x_clean[ , 1] ), 100000 )
+plot( log(1+(r[pick]-1)*1000000) ~ log(s[pick]) )
+```
 
 
 <!-- THE END -->

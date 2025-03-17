@@ -79,42 +79,44 @@ LoadPredictors <- function( pred_dir, add_km_dat ){
 #---- Three layers that needed some work. ----
 # Fixed by adding ceilings and root transforms.
 
+#the_stack <- x_clean
+#rm('the_stack')
 MakeMoreNormal <- function( the_stack ){
-  x <- the_stack[, "rei_qcs"]
-#  skewness(x, na.rm=T)
+  x <- the_stack[, "REI"]
+  skewness(x, na.rm=T)
   ceil <- 0.3
   y <- ifelse(x > ceil, ceil, x)
   range(y, na.rm=T)
-#  skewness(y, na.rm=T)
-  y <- y^(1/2)
-  the_stack[, "rei_qcs"] <- y
+  y <- y^(1/4)
+  skewness(y, na.rm=T)
+  the_stack[, "REI"] <- y
   
- #histogram(y)
+ #histogram(x)
   
-#   x <- the_stack[, "qcs_freshwater_index"]
-# #  skewness(x, na.rm=T)
-#   ceil <- 0.025
-#   y <- ifelse(x > ceil, ceil, x)
-#   range(y, na.rm=T)
-# #  skewness(y, na.rm=T)
-#   y <- y^(1/3)
-#   the_stack[, "qcs_freshwater_index"] <- y
+  x <- the_stack[, "freshwater_index"]
+#  skewness(x, na.rm=T)
+  ceil <- 0.2
+  y <- ifelse(x > ceil, ceil, x)
+  range(y, na.rm=T)
+  skewness(y, na.rm=T)
+  y <- y^(1/3)
+  the_stack[, "freshwater_index"] <- y
   
   #histogram(y)
   
-  x <- the_stack[, "standard_deviation_slope"]
-#  range(x, na.rm=T)
-  ceil <- 10
-  y <- ifelse(x > ceil, ceil, x)
-#  range(y, na.rm=T)
-  skewness(y, na.rm=T)
-  y <- y^0.5
-  the_stack[, "standard_deviation_slope"] <- y
-  
-  x <- the_stack[, "temp_range"]
-#  skewness(x, na.rm=T)
-  y <- x^0.5
-  the_stack[, "temp_range"] <- y
+#   x <- the_stack[, "standard_deviation_slope"]
+# #  range(x, na.rm=T)
+#   ceil <- 10
+#   y <- ifelse(x > ceil, ceil, x)
+# #  range(y, na.rm=T)
+#   skewness(y, na.rm=T)
+#   y <- y^0.5
+#   the_stack[, "standard_deviation_slope"] <- y
+#   
+#   x <- the_stack[, "temp_range"]
+# #  skewness(x, na.rm=T)
+#   y <- x^0.5
+#   the_stack[, "temp_range"] <- y
  
   return( the_stack) 
 }
@@ -255,10 +257,10 @@ MakeScreePlot <- function( indat, nclust, nrand, maxi, sampsize = 0 ){
 
 #---- ClusterPCA: Returns a pair of PCA plots showing the separation of the clusters.
 # NOTE: Uses a relatively small subset of the overall data so these will change with a different sample.
-ClusterPCA <- function( n_samp, clustnum ) {
+ClusterPCA <- function( ras_data, n_samp, clustnum ) {
   
-  ssidx <- sample( 1:length( stack_data_clean[ , 1] ), n_samp )
-  ssamp <- stack_data_clean[ ssidx, ]
+  ssidx <- sample( 1:length( ras_data[ , 1] ), n_samp )
+  ssamp <- ras_data[ ssidx, ]
   
   # re-run cluster for smaller sample.
   cluster_result <- kmeans(ssamp, centers = clustnum, nstart = randomz) # less than 10 seconds
