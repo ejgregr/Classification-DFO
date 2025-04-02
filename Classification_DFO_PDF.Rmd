@@ -114,7 +114,7 @@ The loaded data are saved to dated .RData files so the loading process does not 
 
 Fourteen predictors were loaded into the initial raster stack (Table 1). 
 
-The loaded Raster stack is `r dim(sub_stack)[1]` by `r dim(sub_stack)[2]`, giving a total of `r scales::comma( dim(sub_stack)[1] * dim(sub_stack)[2])` pixels in the study domain. As this is a raster representation, much of this area is land or deeper waters, excluded from the analysis by the bathymetry and substrate layers.
+The loaded Raster stack is `r dim(tif_stack)[1]` by `r dim(tif_stack)[2]`, giving a total of `r scales::comma( dim(tif_stack)[1] * dim(tif_stack)[2])` pixels in the study domain. As this is a raster representation, much of this area is land or deeper waters, excluded from the analysis by the bathymetry and substrate layers.
 
 *Include: proportion nearshore, proportion of that with good substrate, and final sample size for clustering.* 
 
@@ -156,7 +156,10 @@ knitr::kable( z, digits = 2, format = "latex", booktabs = TRUE,
 ```
 \newpage
 ## Distributions and outliers
-Skewness scores show strong nonnormality for several predictors. Transforms were applied to *freshwater_index* and *rei_qcs*. For both predictors, a ceiling was applied to pull in outliers, and power transforms improved the skew (Table 4).
+Skewness scores show strong nonnormality for several predictors. Transforms were attempted for predictors with an absolute skew score > 2. In some cases, a ceiling or floor value was applied to pull in outliers (Table 4).
+
+No transform was applied to the Mixed substrate layer as significant 0-inflation made it hard to normalize.
+
 
 ```{r SkewTable, results='asis', echo=FALSE, table.pos='t'}
 
@@ -194,48 +197,49 @@ kable_styling(latex_options = "hold_position")
 
 ```
 
+The following paragraph describes how the ceiling values allowed grouping of spatially evident outliers at the LOCAL Broughton extents. The effectiveness of pulling in outliers, and the transforms, depend on the spatial extents of the analysis. Generally, the smaller the extents, the less significant this challenge is. 
+
 *REI* was set to a ceiling of 0.3 based on the histogram and the spatial distribution of the data. The highest values are concentrated in the western portion of the study area, and are fully exposed to Queen Charlotte Sound. The ceiling did not group any other location with this region. The *Freshwater_index* was set to a ceiling of 0.2 using the same approach; grouping the highest values concentrated around the western point of Hardwicke Island in Johnstone Strait.
 
-
-```{r, echo=FALSE, results='asis'}
-# Create the data frame
-df <- data.frame(
-  Predictor = c("REI", "freshwater_index"),
-  Ceiling = c(0.3, 0.2),
-  Power_transform = c("1/3", "1/4")
-)
-
-# Render the table using kable with LaTeX format for PDF
-knitr::kable(df, format = "latex", booktabs = TRUE, 
-          caption = "Transforms applied to skewed predictors.",
-          col.names = c("Predictor", "Ceiling", "Power transform"))  %>%
-kable_styling(latex_options = "hold_position")
-```
-
+<!-- # ```{r, echo=FALSE, results='asis'} -->
+<!-- # # Create the data frame -->
+<!-- # df <- data.frame( -->
+<!-- #   Predictor = c("REI", "freshwater_index"), -->
+<!-- #   Ceiling = c(0.3, 0.2), -->
+<!-- #   Power_transform = c("1/3", "1/4") -->
+<!-- # ) -->
+<!-- #  -->
+<!-- # # Render the table using kable with LaTeX format for PDF -->
+<!-- # knitr::kable(df, format = "latex", booktabs = TRUE,  -->
+<!-- #           caption = "Transforms applied to skewed predictors.", -->
+<!-- #           col.names = c("Predictor", "Ceiling", "Power transform"))  %>% -->
+<!-- # kable_styling(latex_options = "hold_position") -->
+<!-- # ``` -->
+<!-- #  -->
 
 \newpage
-Pre (Figure 2) and post (Figure 3) histograms showing the effects of the transformation and scaling of the data. 
-```{r preHists, echo=FALSE, fig.pos='h', fig.cap="Histograms of the selected, unmodified predictors.", fig.align='center', fig.width=8, fig.height=3.75}
+Pre (Figure 1) and post (Figure 2) histograms showing the effects of the transformation and scaling of the data. 
+```{r preHists, echo=FALSE, fig.pos='h', fig.cap="Histograms of the selected, unmodified predictors.", fig.align='center', fig.width=8, fig.height=7}
 
-# fig.pos='H', 
-#```{r PreAndPostHists, echo=FALSE, include=FALSE, fig.pos='t', fig.cap= c("Histograms of the #selected, unmodified #Predictors.", "Histograms of selected, transformed, and scaled predictor #data."), out.extra='keepaspectratio', Fig.align='center'}
+# Plot the first group of histograms. 
+# ** NOTE the height (above) and dimensions below depend on number of predictors! **
 
-# Plot the first group of 8 histograms
-par(mfrow = c(2, 4), mar = c(2, 2, 2, 2))
+rs <- ceiling( length( colnames( x_clean)) / 4)
+
+par(mfrow = c(rs, 4), mar = c(2, 2, 2, 2))
 
 for (i in 1:dim(x_clean)[2]) {
   hist(x_clean[, i], nclass=50, main = colnames(x_clean)[i], xlab="")
 }
 ```
-
 <!-- \smallskip 
      \medskip -->
 \bigskip
 
-```{r transHists, echo=FALSE, fig.cap="Histograms of the selected, transformed, and scaled predictor data.", fig.pos='h', fig.align='center', fig.width=8, fig.height=3.75}
+```{r transHists, echo=FALSE, fig.cap="Histograms of the selected, transformed, and scaled predictor data.", fig.pos='h', fig.align='center', fig.width=8, fig.height=7}
 
 # Plot the second group of 8 histograms
-par(mfrow = c(2, 4), mar = c(2, 2, 2, 2))
+par(mfrow = c(rs, 4), mar = c(2, 2, 2, 2))
 
 for (i in 1:dim(tx_clean)[2]) {
   hist(tx_clean[, i], nclass=50, main = colnames(tx_clean)[i], xlab="")
@@ -268,17 +272,17 @@ plot(sk, col = 1:nclust, border=NA, main = "" )
 
 \newpage
 ## Part 2 - Clusters and predictor loadings
-While exercising the cluster analysis, northness was found to contribute equally to the clusters regardless of number of clusters. It was dropped to simplify the analysis. 
 
-The PCA plots (Figure 6, Figure 7) show how the clusters are distributed across the first two (Figure 7) and second two (Figure 8) dimensions.
+The PCA loadings are summarised in Table 5, and shown graphically for the first four dimensions (Figures 6 and 7). 
 
-The loadings are quantified in Table 5, and shown graphically in Figure 8. 
+Violin plots summarising the contribution of each predictor across clusters (Fig 8), show how many predictors are distributed across all clusters, potentially limiting their utility. 
+
 
 ```{r PCATable, warning=FALSE, message=FALSE, echo=FALSE}
 
 loads <- round( pca_results$loadings$rotation, 3 )
 knitr::kable( loads, format = "latex", booktabs = TRUE, 
-              caption = "Correlation matrix for assessing predictor cross-correlations") %>%
+              caption = "Loadings of predictor variables on the Principal Components") %>%
   kable_styling( latex_options = c("scale_down","hold_position") )
 
 ```
@@ -288,17 +292,45 @@ par(mar = c(0, 0, 0, 0))
 plot( pca_results$plot1 )
 ```
 
-
-\newpage
-
 ```{r PCAPlot2, warning=FALSE, message=FALSE, echo=FALSE, fig.cap="PCA Plots showing the clusters across the third and fourth dimensions.", fig.align='center', fig.width=6.5, fig.height=3.7, fig.pos='h'}
 par(mar = c(0, 0, 0, 0)) 
 plot( pca_results$plot2 )
 ```
 
-```{r ViolinPlot, warning=FALSE, message=FALSE, echo=FALSE, fig.cap="Violin plots showing distribiton of predictors in each of the k-means clusters.", fig.pos='h'}
+```{r ViolinPlot, warning=FALSE, message=FALSE, echo=FALSE, fig.cap="Violin plots showing distribiton of predictors in each of the k-means clusters.", fig.height=6, fig.pos='h' }
 vplots
 ```
+
+
+\newpage
+\FloatBarrier
+
+# Discussion
+
+## Predictor data 
+The arc-chord distribution thing is important if for no other reason than data distribution. The Github and OpenData should distributed well-formed data. Also, this isn't the last word in roughness as this scales, and that matters (see BTM). 
+
+Categorical variables are hard for cluster analyses. The distribution of the individual substrate neighbourhoods (Figs 1 and 2) is interesting. 
+
+Visual assessment of coastline in the Broughton suggests lots of pocket beaches. This is confirmed by Shorezone data. However, the substrate map does not show soft bottom in the ITD where it was pointed out by MFN. Most of the area is predicted to be hard, with mud/mixed/sand patches at depth. 
+
+
+## Correlations
+The limited correlation among the predictors is interesting. Seems to imply we have a very granular view of the real world. We probably want to consider at what point does this extensive characterisation of space reach its limits without acknowledging seasonal, annual changes? 
+
+
+## Clusters
+Working with the SPECTRAL data, found that a single, descrete predictor (in this case aspect) can drive the clustering. Watch for examples here. It was hard to see the driving aspects for each of the 8 clusters tho. Lots of similarities with the others - PCA has high overlap between all clusters. 
+
+
+
+
+# References
+
+Walbridge, S.; Slocum, N.; Pobuda, M.; Wright, D.J. Unified Geomorphological Analysis Workflows with Benthic Terrain Modeler. Geosciences 2018, 8, 94. doi:10.3390/geosciences8030094
+
+
+
 
 <!-- Next Step: Include the corresponding TIF, rotated and full page! -->
 

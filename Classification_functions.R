@@ -79,47 +79,86 @@ LoadPredictors <- function( pred_dir, add_km_dat ){
 #---- Three layers that needed some work. ----
 # Fixed by adding ceilings and root transforms.
 
+
 #the_stack <- x_clean
+#colnames(the_stack)
 #rm('the_stack')
 MakeMoreNormal <- function( the_stack ){
-  x <- the_stack[, "REI"]
-  skewness(x, na.rm=T)
-  ceil <- 0.3
-  y <- ifelse(x > ceil, ceil, x)
-  range(y, na.rm=T)
-  y <- y^(1/4)
-  skewness(y, na.rm=T)
-  the_stack[, "REI"] <- y
+
+  # x <- the_stack[, "circ_mean_summer"]
+  # skewness(x, na.rm=T)
+  # y <- x^0.5
+  # the_stack[, "circ_mean_summer"] <- y
   
- #histogram(x)
   
   x <- the_stack[, "freshwater_index"]
-#  skewness(x, na.rm=T)
+  y <- x^(1/2)
+  skewness(y, na.rm=T)
+  the_stack[, "freshwater_index"] <- y
+  
+### OLD FWI transform for regional data with only hard substrate
+  # x <- the_stack[, "freshwater_index"]
+  # ceil <- 0.2
+  # y <- ifelse(x > ceil, ceil, x)
+  # range(y, na.rm=T)
+  # skewness(y, na.rm=T)
+  # y <- y^(1/3)
+  # the_stack[, "freshwater_index"] <- y
+  
+  
+  x <- the_stack[, "RCSI"]
+  y <- x^(1/4)
+  skewness(y, na.rm=T)
+  the_stack[, "RCSI"] <- y
+  
+  
+  x <- the_stack[, "REI"]
+  skewness(x, na.rm=T)
   ceil <- 0.2
   y <- ifelse(x > ceil, ceil, x)
   range(y, na.rm=T)
-  skewness(y, na.rm=T)
   y <- y^(1/3)
-  the_stack[, "freshwater_index"] <- y
+  skewness(y, na.rm=T)
+  the_stack[, "REI"] <- y
   
-  #histogram(y)
   
-#   x <- the_stack[, "standard_deviation_slope"]
-# #  range(x, na.rm=T)
-#   ceil <- 10
-#   y <- ifelse(x > ceil, ceil, x)
-# #  range(y, na.rm=T)
-#   skewness(y, na.rm=T)
-#   y <- y^0.5
-#   the_stack[, "standard_deviation_slope"] <- y
-#   
-#   x <- the_stack[, "temp_range"]
-# #  skewness(x, na.rm=T)
-#   y <- x^0.5
-#   the_stack[, "temp_range"] <- y
+  # x <- the_stack[, "salt_mean_summer"]
+  # skewness(x, na.rm=T)
+  # y <- x^8
+  # skewness(y, na.rm=T)
+  # the_stack[, "salt_mean_summer"] <- y
+  
+  
+  x <- the_stack[, "salt_range"]
+  skewness(x, na.rm=T)
+  ceil <- 4
+  y <- ifelse(x > ceil, ceil, x)
+  y <- x^(1/4)
+  skewness(y, na.rm=T)
+  the_stack[, "salt_range"] <- y
+  
+ # "Rocky" is fine.
+ # No transform applied to "mixed" as serious 0-inflation hard to normalize
+ # skewness(x, na.rm=T)
+ # y <- asinh(x)
+ # y <- (x+0.001)^(1/2)
+ # skewness(y, na.rm=T)
+ # the_stack[, "mixed"] <- y
  
-  return( the_stack) 
+ x <- the_stack[, "sandy"]
+ #skewness(x, na.rm=T)
+ y <- x^0.5
+ the_stack[, "sandy"] <- y
+ 
+ x <- the_stack[, "muddy"]
+ skewness(x, na.rm=T)
+ y <- (x)^(1/3)
+ skewness(y, na.rm=T)
+ the_stack[, "muddy"] <- y
+
+return( the_stack ) 
 }
+
 
 # The minimum extents of the clustering data
 # 2025/03/14: Now looks at raster list, not the directory.
@@ -143,15 +182,10 @@ CalcMinExtents <- function( raster_list ){
 }
 
 
-#---- For DFO, does double duty: Sets unsuitable elevations and bottom types to NA ----
-# Modifies two rasters in place. 
-DropNonHabitat <- function( data_in, zmin, zmax ){
-  
-  # BATHY: To avoid spurious scaling and classification, and outliers, this 
-  # removes all data above the HHWL (assumed to be 5 m) AND below 40 m depth. 
-  # NOTE: Hard-coded for three MSEA layers.
-  
-  # build the required trim index to apply to all layers ... 
+# Removes all data above outside zmin and zmax, intended to be the range of kelp.
+# Anticipated to be HHWL (e.g, 5 m) to 40 m depth. 
+TrimBathymetry <- function( data_in, zmin, zmax ){
+# build the required trim index to apply to all layers ... 
   trim_data <- getValues( data_in$bathymetry )
   trim_idx <- (trim_data < zmin | trim_data > zmax )
   trim_data[ trim_idx ] <- NA
@@ -163,33 +197,11 @@ DropNonHabitat <- function( data_in, zmin, zmax ){
     data_in[[i]] <- setValues( data_in[[i]], trim_data )
     data_in[[i]] <- setMinMax( data_in[[i]] )
   }
-  print( "Unsuitable elevations removed.")
-  
-  # SUBSTRATE: Categoricals are hard in k-means. Easier to filter like depth. 
-  # Sets values  >'2' to NA. 
-  # A binary, hard/soft map may be useful.
-  
-  a <- getValues( tif_stack$SUBSTRATE )
-  histogram(a)
-  
-  # build the required trim index to apply to all layers ... 
-  trim_data <- getValues( data_in$SUBSTRATE )
-  trim_idx <- (trim_data > 2 )
-  trim_data[ trim_idx ] <- NA
-  
-  for (i in 1:dim(data_in)[[3]] ){
-    
-    trim_data <- getValues( data_in[[i]] )
-    trim_data[ trim_idx ] <- NA
-    data_in[[i]] <- setValues( data_in[[i]], trim_data )
-    data_in[[i]] <- setMinMax( data_in[[i]] )
-  }
-  print( "Unsuitable substrate removed.")
-  
-  return( data_in )
+  print( 'TIF stack trimmed to nearshore depths.')
+return( data_in )
 }
 
-
+    
 #---- ClipPredictors: masks away deeper water and limits extents based on a polygon mask
 ClipPredictors <- function( stack_in, the_mask){
   z <- stack()
@@ -300,7 +312,7 @@ ClusterPCA <- function( ras_data, n_samp, clustnum ) {
     geom_segment(data = pca_loadings, aes(x = 0, y = 0, xend = PC1, yend = PC2),
                  arrow = arrow(length = unit(0.2, "cm")), color = "blue") +
     geom_text(data = pca_loadings, aes(x = PC1, y = PC2, label = rownames(pca_loadings)), 
-              hjust = 0, vjust = 1, color = "red")
+              hjust = 0, vjust = 1, color = "black")
 
   plot_D3D4 <- ggscatter(
     ind_coord, x = "Dim.3", y = "Dim.4", 
@@ -330,17 +342,17 @@ PredictClusters <- function(newdata, kmeans_model) {
 #---- TransferClusters: returns new values for the prediction rasters containing predictions. ----
 # transferred from the random sample used in the classification ----
 # Assembly required with the classified pixels before plotting. Function by ChatGPT.
-transferCluster <- function(values_target, c_result){
+transferCluster <- function(stack_data, values_target, c_result){
 # uses GLOBALS sidx, stack_data_clean   
   #--- Two steps here: First assign clusters to the rest of the clean stack data, 
   #     THEN put the clean data back in the raster.
   # Uses samp and sidx from lines ~150 above.
   # Find the things not in the sample (using sidx from line ~150 above).
   
-  not_sidx <- setdiff( 1:dim(stack_data_clean)[[1]], sidx )
+  not_sidx <- setdiff( 1:dim(stack_data)[[1]], sidx )
   
   # the data to predict clusters for
-  new_dat <- stack_data_clean[ not_sidx, ]
+  new_dat <- stack_data[ not_sidx, ]
   # Process the new data in chunks of 10k to ensure performance
   chunk_size <- 10000
   n_chunks <- ceiling(nrow(new_dat) / chunk_size)
@@ -380,6 +392,54 @@ transferCluster <- function(values_target, c_result){
 
 
 ####------------Depreciated or replaced functions----------------------------
+
+# Specific for processing DFO bathymetry and substrate. 
+# Sets unsuitable elevations and bottom types to NA.
+# 2025/03/28: Vestigial, as bathy separated out and different substrate now used.
+DropNonHabitat <- function( data_in, zmin, zmax ){
+  
+  # BATHY: To avoid spurious scaling and classification, and outliers, this 
+  # removes all data above the HHWL (assumed to be 5 m) AND below 40 m depth. 
+  # NOTE: Hard-coded for three MSEA layers.
+  
+  # build the required trim index to apply to all layers ... 
+  trim_data <- getValues( data_in$bathymetry )
+  trim_idx <- (trim_data < zmin | trim_data > zmax )
+  trim_data[ trim_idx ] <- NA
+  
+  for (i in 1:dim(data_in)[[3]] ){
+    
+    trim_data <- getValues( data_in[[i]] )
+    trim_data[ trim_idx ] <- NA
+    data_in[[i]] <- setValues( data_in[[i]], trim_data )
+    data_in[[i]] <- setMinMax( data_in[[i]] )
+  }
+  print( "Unsuitable elevations removed.")
+  
+  # SUBSTRATE: Categoricals are hard in k-means. Easier to filter like depth. 
+  # Sets values  >'2' to NA. 
+  # A binary, hard/soft map may be useful.
+  
+  a <- getValues( tif_stack$SUBSTRATE )
+  histogram(a)
+  
+  # build the required trim index to apply to all layers ... 
+  trim_data <- getValues( data_in$SUBSTRATE )
+  trim_idx <- (trim_data > 2 )
+  trim_data[ trim_idx ] <- NA
+  
+  for (i in 1:dim(data_in)[[3]] ){
+    
+    trim_data <- getValues( data_in[[i]] )
+    trim_data[ trim_idx ] <- NA
+    data_in[[i]] <- setValues( data_in[[i]], trim_data )
+    data_in[[i]] <- setMinMax( data_in[[i]] )
+  }
+  print( "Unsuitable substrate removed.")
+  
+  return( data_in )
+}
+
 
 #---- TrimStack: limit extents based on a polygon mask (vestigial)
 # NOTE: This function now superseded by the crop/mask approach in ClipPredictors.

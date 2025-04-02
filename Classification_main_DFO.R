@@ -22,13 +22,17 @@
 # 2024/09/11: A few minor(ish) changes: consolidate all changes to data (ie, transforming, centering, 
 #   scaling) in one place. Bathy and Substrate applied as exclusions. 
 # 2024/10/02: Update RMD based on findings from LSSM work. 
+# 2025/03: Revisit with updated predictors - RCSI, and sentinel SST metrics. Update RMD. 
+#   Meet w JL to discuss finalisation of code and report. 
 
-# To Do:
-#   Find where we document what happened to FW index (it was dropped cuz of PCA plots)
-#   Include the updated names (or maybe not?
-#   See about gap statistics and fix the transformation table)
 
 #################################################################################
+# Instructions:
+#   1) Review directories and ensure directories exist, and desired TIF files are located in the raster_dir. 
+#   2) Check processing flags. Loading and prepping takes some time so loading from rData file is quicker.
+#   3) Review correlations and variable removal. 
+#       This section of the code is SPECIFIC to the input data set, and processing 
+#       the full set of predictors into a "clean" set (i.e., scaled and uncorrelated) takes time.
 
 print('Starting Classification - DFO Version ...')
 rm(list=ls(all=T))  # Erase environment.
@@ -44,13 +48,14 @@ data_dir   <- 'C:/Data/Git/classification-DFO/Data'
 results_dir<- 'C:/Data/Git/classification-DFO/Results' 
 
 # Processing FLAGS...
-loadtifs <- F # If true the data will be re-loaded from TIFs, else it will be loaded from rData.
+loadtifs <- T # If true the data will be re-loaded from TIFs, else it will be loaded from rData.
 clipdata <- T # If true a spatial subset of the data will be taken based on a polygon shape file. 
+trimtobathy <- T
 reclust  <- T # If true, re-cluster full data set prior to mapping, else predict to unclassified pixels.
 addKmDat <- T # Needed for the Sentinel SST tifs
 
-#---- Part 1 of 3: Load, clean, and prepare predictor data.  ----
-# If loadtifs == TRUE then run all this else load the processed data.
+#---- Part 1: Load and trim predictor data.  ----
+# If loadtifs == TRUE then TIFs loaded from raster_dir, else a stack is loaded from rData file.
 
 tif_stack <- stack()
 today <- format(Sys.Date(), "%Y-%m-%d")
@@ -58,16 +63,10 @@ today <- format(Sys.Date(), "%Y-%m-%d")
 if (loadtifs) {
   print( "Loading predictors ... ")
   src_stack <- LoadPredictors( raster_dir, addKmDat )
-  print( "Data loaded.")
+  print( 'TIFs loaded from data directory.')
 
   tif_stack <- src_stack
   
-  # bathymetry is trimmed for landside and unsuitable depths for kelps.
-  # Land and deep elevations are removed from the MSEA bathymetry
-  # From Substrate produce hard only, marking kelp suitable areas. 
-  # These restrictions manifest when completeCases() are selected.
-  tif_stack <- DropNonHabitat( tif_stack, -5, 40 )
-
   if (clipdata) {
     print( "clipping TIFs ... ")
     amask <- shapefile("C:\\Data\\SpaceData\\Broughton\\broughton_region.shp")
@@ -75,8 +74,8 @@ if (loadtifs) {
     tif_stack <- ClipPredictors( tif_stack, amask )
     print('Rasters clipped.')
   }
-
-  save( tif_stack, file = paste0( data_dir, '/tif_stack_', today, '.rData' ))
+  save( tif_stack, file = paste0( data_dir, '/tif_stack_BR_', today, '.rData' ))
+  print( 'TIF stack saved.')
 
 } else {
   print( 'Loading project data ... ')
@@ -84,35 +83,41 @@ if (loadtifs) {
 #  load( paste0( data_dir, '/tifs_DFO_scaled_QCS_2024-09-05.rData' ))
 #  load( paste0( data_dir, '/tifs_DFO_centred_QCS_2024-09-05.rData' ))
 
- load( paste0( data_dir, '/tif_stack_2025-03-14.rData' ))
+ load( paste0( data_dir, '/tif_stack_2025-03-28.rData' ))
 #  load( paste0( data_dir, '/t_stack_data_2024-10-02.rData' ))
+ print( 'TIF stack loaded from rData file. ')
 }
 
-#---- Dynamic working area ----
+if (trimtobathy) {
+# Trim bathymetry to remove landside and unsuitable depths for kelps.
+  tif_stack <- TrimBathymetry( tif_stack, -5, 40 )
+}
 
-# Drop substrate and bathymetry as their role is done. 
-sub_stack <- dropLayer( tif_stack, c("bathymetry", "SUBSTRATE" ))
-
-names( sub_stack )
-dim(   sub_stack )
 # RENAME loaded predictors for standard readability
-new_names <- c("circ_mean_summer", "freshwater_index", "RCSI", "REI",
-               "rugosity", "salt_mean_summer", "salt_range", "SD_slope", 
-               "tidal_mean_summer", "sst_max", "sst_mean", "sst_sd")
-names(sub_stack) <- new_names
+# !!Review CAREFULLY if predictor data change!!
+new_names <- c("bathymetry", "circ_mean_summer", "mixed", "muddy", 
+               "freshwater_index", "RCSI", "REI", "rocky",
+               "rugosity", "salt_mean_summer", "salt_range", "sandy", 
+               "SD_slope", "tidal_mean_summer", "sst_max",
+               "sst_mean", "sst_sd")
+names(tif_stack) <- new_names
+names(tif_stack)
 
+
+#---- Part 2: Predictor correlations ----
 
 #-- Move to matrix space from raster space 
-x <- getValues( sub_stack )
+x <- getValues( tif_stack )
 #-- Identify and  only pixels with all data
-clean_idx <- complete.cases( sub_stack )
+# NB: This decouples the data from the RasterStack, and requires re-assembly for mapping
+# dim( sub_stack )
+clean_idx <- complete.cases( x )
 x_clean <- x[ clean_idx, ]
-
+# dim( x_clean )
 
 #---- Correlations and predictor selection ----
-
-#---- Compare rugosity and SD slope ----
-# RUGOSITY is a bit of a problem predictor.
+#---- Select best representation of bottom roughness ----
+# RUGOSITY is a bit of a problem predictor in that it needs transformation.
 range( x_clean[,'rugosity'])
 r <- x_clean[,'rugosity']
 
@@ -124,8 +129,8 @@ s <- x_clean[,'SD_slope']
 # hist( log(1+(r-1)*1000000), nclass=50, main="Transformed rugosity", xlab = "log( (r-1) * 1xe6)")
 # hist( log(s), nclass=50, main="Transformed SD of slope", xlab = "log(s)")
 
+# Tranform rugosity and drop SD_slope based on above results. 
 x_clean[,'rugosity'] <- log(1+(r-1)*1000000)
-
 x_clean <- x_clean[, -which(colnames(x_clean) == "SD_slope")]
 head(x_clean)
 
@@ -140,11 +145,20 @@ z <- cor_table[ high_rows, ]
 #--> cor_table prepared for printing in the RMD script.
 #--> See RMD doc for explanation of dropping other predictors. 
 
-#-- Final removal of correlated or otherwise no good layers from stack data matrix 
+#---- Final Layer removal ----
+#-- Correlated layers 
 x_clean <- x_clean[, !colnames(x_clean) %in% c("tidal_mean_summer", "sst_mean", "sst_sd")]
 head(x_clean)
-                           
-                         
+
+#-- Non-independent PCA loadings
+  # salt_mean_summer and salt_range
+  # bathymetry and sandy
+  # REI and RCS
+x_clean <- x_clean[, !colnames(x_clean) %in% c("salt_mean_summer", "bathymetry", "circ_mean_summer")]
+head(x_clean)
+
+
+
 #-- Visualize unmodified source raster data
 dim( x_clean )
 colnames( x_clean )
@@ -158,29 +172,22 @@ for (i in seq_along(colnames( x_clean ))) {
        col = "steelblue", border = "white") }
 
 
-# Prepare the data for classification.
+### END CORRELATION SECTION
+
+#---- Part 3: Predictor transformations ----
 print( "Transforming data  ... ")
 
 # Fix some (hard-coded) distributions by adding ceilings and root transforms.
 tx_clean <- MakeMoreNormal( x_clean )
-
+names(x_clean)
 print( "Centering and scaling  ... ")
 tx_clean <- scale( tx_clean, center=T,  scale=T )
 print('Data prepped.')
-save( tx_clean, file = paste0( data_dir, '/tx_clean_scaled_', today, '.rData' ))
+save( tx_clean, file = paste0( data_dir, '/tx_clean_scaled_BR', today, '.rData' ))
 print('Scaled data saved.')
 
-
 # Histograms of unscaled and scaled vars in the RMD. 
-#--> Put skews on the histograms?
-
-
-#---- Subset the stack data so it corresponds to tx_clean. ----
-# NB: The data have been decoupled from the RasterStack, and will require re-assembly for mapping
-# dim( sub_stack )
-# sub_stack_clean <- sub_stack[ clean_idx ]
-# dim( sub_stack_clean )
-rm( "sub_stack_clean")
+#   Could add skew values onto the histograms.
 
 #---- Part 2 of 3: Cluster number selection ----
 
@@ -196,14 +203,19 @@ nsample  <- 50000 # Scree plot needs a subsample to run reasonably.
 plotme <- MakeScreePlot( tx_clean, nclust, randomz, imax, nsample )
 plotme
 
+################
+### End of variable & cluster N selection
+################
+
 #---- Create a working set of N clusters (N based on scree plot) to further assess cluster number. ----
 
-nclust  <- 5 # the number of clusters based on scree plot, above.
+nclust  <- 6 # the number of clusters based on scree plot, above.
 nsample <- 500000 # a larger sample for more robust classification
 
 sidx <- sample( 1:length( tx_clean[ , 1] ), nsample )
 samp <- tx_clean[ sidx, ]
 cluster_result <- kmeans(samp, centers=nclust, nstart=randomz, iter.max=imax) 
+saved_seed <- .Random.seed
 
 #---- Part 2b: Create heat map of within-cluster standard deviations ----
 
@@ -258,7 +270,7 @@ pca_n <- 25000
 #Returns a list of results (loadings table, and 2 plots)
 pca_results <- ClusterPCA( tx_clean, pca_n, nclust ) # uses global variable stack_data_clean
 names(pca_results) <- c("loadings", "plot1","plot2")
-
+pca_results$plot1
 #Percentage of variance explained by dimensions
 #eigenvalue <- round(get_eigenvalue(res_pca), 1)
 #var_percent <- eigenvalue$variance.percent
@@ -292,16 +304,20 @@ vplots
 # Building a predictor raster takes time. Not useful to run this until 
 # a comparison RMD report is being generated. 
 
-out_tif_fname <- paste0( '/MSEA_gdata_5cluster_', today, '.tif' )
+write_name <- paste0( '/MSEA_BR_10vB_6cluster_', today )
+out_tif_fname <- paste0( write_name, '.tif' )
 
 # initialize target data structure 
-cluster_raster <- sub_stack[[1]]
+cluster_raster <- tif_stack[[1]]
 dataType(cluster_raster) <- "INT1U"
 cluster_raster[] <- NA
 
 if (reclust == T) {
   # Re-cluster using all the clean data  ... 
   # less than 1 min with iter.max = 20, nstart = 20 for smallest region
+  
+  # Re-use seed from above to ensure identical clusters
+  .Random.seed <- saved_seed
   cluster_result <- kmeans(tx_clean, centers = nclust, nstart = randomz, iter.max = imax)
   
   # Assign the clustered values ... 
@@ -312,8 +328,10 @@ if (reclust == T) {
   # put the updated values back on the target cluster
   values( cluster_raster ) <- new_values  
 } else {
-  # Predict values for unclustered cells. Can be more time-consuming than re-classifying everything. 
-  values( cluster_raster ) <- transferCluster( values(cluster_raster), cluster_result )
+  # Predict values for unclustered cells. 
+  # Currently more time-consuming than re-classifying everything, probably cuz predicting
+  # includes all the pixels outside the area of interest. Could likely be more efficient. 
+  values( cluster_raster ) <- transferCluster( tx_clean, values(cluster_raster), cluster_result )
 }
 
 #--- Display the results, first as histogram then as map.  
@@ -353,7 +371,7 @@ library( kableExtra)
 rmarkdown::render( "Classification_DFO_PDF.Rmd",   
                    output_format = 'pdf_document',
                    output_dir ="C:/Data/Git/Classification-DFO/Results",
-                   output_file = paste0( "MSEA_gdata_5cluster_", today ))
+                   write_name )
 
 
 #---- Some details on correlation analysis ... ----
