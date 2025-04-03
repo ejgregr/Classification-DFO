@@ -1,13 +1,12 @@
 #----------------------------------------------------------------------------
-# Script:  Broughton2_functions.R
-# Created: May 2024 from the original Broughton script. EJG
+# Script:  Classification_functions.R
+# Created: May 2024.
 #
-# Purpose: Support building and evaluation of Seaweed Clusters for Coastal BC.
+# Purpose: Support building and evaluation of nearshore clusters for Coastal BC.
 # Illustrated at 3 spatial extents using the Broughton Region.
 #
 # Notes:
 #  - 2024/06/05: Updated from the almost final DFO version.
-
 
 #================================== Load require packages =================================
 

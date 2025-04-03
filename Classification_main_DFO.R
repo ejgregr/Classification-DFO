@@ -19,7 +19,7 @@
 # 2024/09/10: Working now. Have spent days looking at distributions, outliers, and skew. 
 #   Substrate has now joined bathy as a necessary characteristic. Almost ready to to start running 
 #   some RMD reports and comparing results.
-# 2024/09/11: A few minor(ish) changes: consolidate all changes to data (ie, transforming, centering, 
+# 2024/09/11: A few minor changes: consolidate all changes to data (ie, transforming, centering, 
 #   scaling) in one place. Bathy and Substrate applied as exclusions. 
 # 2024/10/02: Update RMD based on findings from LSSM work. 
 # 2025/03: Revisit with updated predictors - RCSI, and sentinel SST metrics. Update RMD. 
@@ -28,18 +28,37 @@
 
 #################################################################################
 # Instructions:
-#   1) Review directories and ensure directories exist, and desired TIF files are located in the raster_dir. 
-#   2) Check processing flags. Loading and prepping takes some time so loading from rData file is quicker.
-#   3) Review correlations and variable removal. 
-#       This section of the code is SPECIFIC to the input data set, and processing 
+# - Review directories and ensure directories exist, and desired TIF files are located in the raster_dir. 
+# - Check processing flags. Loading and prepping takes some time so loading from rData file is quicker.
+# - Part 1: Predictor load and trim.
+#   --> Saves the loaded data to an .rData file.
+# - Part 2: Predictor correlations: Review correlations and remove cross-correlated predictors
+# - Part 3: Predictor transformations and scaling: Examine the distribution of each predictor, check skewness, 
+#     and transform as necessary. Then pass transformed variables through the scaling process.
+#     This is an exploratory, manual process to identify suitable transforms.  
+#   --> saves a matrix of clean, transformed predictors for cluster analysis to an .rData file. 
+#   NB: This section of the code is SPECIFIC to the input data set, and processing 
 #       the full set of predictors into a "clean" set (i.e., scaled and uncorrelated) takes time.
+# - Part 4: Cluster number selection. This sets some clustering and randomization constants, and creates a 
+#     scree plot to inform the number of potential clusters. 
+# - Part 5: Initial clustering, heat map and silhouette plot. Some preliminary diagnostics
+#     for the predictors and number of clusters selected.
+# - Part 6: Detailed examination of N clusters. Includes PCA plots of the predictor contributions
+#     to the clusters, and violin plots showing the contribution of each preditor across clusters. 
+# - Part 7: Spatialize the WORKING cluster: This reconstructs the raster for mapping, either by 
+#     re-clustering the entire data set using the same randomization, or by predicting 
+#     the full data set from subset results. NB: Re-clustering all the data, tho time consuming, 
+#     is typically faster.
+# - Part 8: Knit and render Markdown file: Creates a report containing all the above results. 
+#     See RMD file for details.
 
 print('Starting Classification - DFO Version ...')
+# NOTE: There is a separate version that classifies the Broughton region using only oceanographic data.
+
 rm(list=ls(all=T))  # Erase environment.
 
 # Load necessary packages and functions ... 
 source( "classification_functions.R" )
-# source( "Plot_Functions.R" )
 
 # Directories ...
 #-- Source and output directories. Will be created if doesn't exist, overwritten if it does.
@@ -48,7 +67,7 @@ data_dir   <- 'C:/Data/Git/classification-DFO/Data'
 results_dir<- 'C:/Data/Git/classification-DFO/Results' 
 
 # Processing FLAGS...
-loadtifs <- T # If true the data will be re-loaded from TIFs, else it will be loaded from rData.
+loadtifs <- F # If true the data will be re-loaded from TIFs, else it will be loaded from rData.
 clipdata <- T # If true a spatial subset of the data will be taken based on a polygon shape file. 
 trimtobathy <- T
 reclust  <- T # If true, re-cluster full data set prior to mapping, else predict to unclassified pixels.
@@ -80,11 +99,8 @@ if (loadtifs) {
 } else {
   print( 'Loading project data ... ')
   # Ideally meaningfully named and tested so no source is required.
-#  load( paste0( data_dir, '/tifs_DFO_scaled_QCS_2024-09-05.rData' ))
-#  load( paste0( data_dir, '/tifs_DFO_centred_QCS_2024-09-05.rData' ))
-
- load( paste0( data_dir, '/tif_stack_2025-03-28.rData' ))
-#  load( paste0( data_dir, '/t_stack_data_2024-10-02.rData' ))
+ load( paste0( data_dir, '/tif_stack_BR_2025-03-31.rData' ))
+ # load( paste0( data_dir, '/t_stack_data_2024-10-02.rData' ))
  print( 'TIF stack loaded from rData file. ')
 }
 
@@ -115,7 +131,6 @@ clean_idx <- complete.cases( x )
 x_clean <- x[ clean_idx, ]
 # dim( x_clean )
 
-#---- Correlations and predictor selection ----
 #---- Select best representation of bottom roughness ----
 # RUGOSITY is a bit of a problem predictor in that it needs transformation.
 range( x_clean[,'rugosity'])
@@ -135,7 +150,7 @@ x_clean <- x_clean[, -which(colnames(x_clean) == "SD_slope")]
 head(x_clean)
 
 
-#---- Correlation across data layers ----
+#---- Correlation across data layers 
 cor_table <- round( cor( x_clean ), 3)
 cor_table[lower.tri(cor_table, diag=TRUE)] <- NA
 
@@ -143,23 +158,12 @@ high_rows <- apply(cor_table, 1, function(row) any(row > 0.6, na.rm = TRUE))
 z <- cor_table[ high_rows, ]
 
 #--> cor_table prepared for printing in the RMD script.
-#--> See RMD doc for explanation of dropping other predictors. 
 
-#---- Final Layer removal ----
-#-- Correlated layers 
+#---- Remove correlated layers 
 x_clean <- x_clean[, !colnames(x_clean) %in% c("tidal_mean_summer", "sst_mean", "sst_sd")]
 head(x_clean)
 
-#-- Non-independent PCA loadings
-  # salt_mean_summer and salt_range
-  # bathymetry and sandy
-  # REI and RCS
-x_clean <- x_clean[, !colnames(x_clean) %in% c("salt_mean_summer", "bathymetry", "circ_mean_summer")]
-head(x_clean)
-
-
-
-#-- Visualize unmodified source raster data
+#-- Visualize distributions of non-correlated predictors
 dim( x_clean )
 colnames( x_clean )
 
@@ -171,10 +175,10 @@ for (i in seq_along(colnames( x_clean ))) {
        xlab = '', ylab = '',
        col = "steelblue", border = "white") }
 
-
 ### END CORRELATION SECTION
 
-#---- Part 3: Predictor transformations ----
+
+#---- Part 3: Predictor transformations and scaling ----
 print( "Transforming data  ... ")
 
 # Fix some (hard-coded) distributions by adding ceilings and root transforms.
@@ -189,13 +193,13 @@ print('Scaled data saved.')
 # Histograms of unscaled and scaled vars in the RMD. 
 #   Could add skew values onto the histograms.
 
-#---- Part 2 of 3: Cluster number selection ----
+#---- Part 4: Cluster number selection ----
 
 set.seed <- 42 # Seed for reproducibility
 randomz  <- 20 # the number of randomizations for kmeans to do.
 imax     <- 25 # maximum iterations to try for convergence
 
-#---- Part 2a: Explore number of clusters using Within-sum-of-squares scree plot ----
+#---- Explore number of clusters using Within-sum-of-squares scree plot
 # Runs kmeans with increasing number of clusters
 
 nclust   <- 18 # number of clusters for scree plot
@@ -203,12 +207,12 @@ nsample  <- 50000 # Scree plot needs a subsample to run reasonably.
 plotme <- MakeScreePlot( tx_clean, nclust, randomz, imax, nsample )
 plotme
 
-################
-### End of variable & cluster N selection
-################
+#---- Part 5: Initial clustering, heat map and silhouette plot ----
 
-#---- Create a working set of N clusters (N based on scree plot) to further assess cluster number. ----
+# define the name for RMD and TIF output 
+write_name <- paste0( '/MSEA_BR_10vB_6cluster_', today )
 
+# Create a working set of N clusters (N based on scree plot) sampled from clean data set.
 nclust  <- 6 # the number of clusters based on scree plot, above.
 nsample <- 500000 # a larger sample for more robust classification
 
@@ -217,8 +221,7 @@ samp <- tx_clean[ sidx, ]
 cluster_result <- kmeans(samp, centers=nclust, nstart=randomz, iter.max=imax) 
 saved_seed <- .Random.seed
 
-#---- Part 2b: Create heat map of within-cluster standard deviations ----
-
+#---- Create heat map of within-cluster standard deviations
 # Define color palette
 pal_heat <- rev( brewer.pal(n = nclust, name = "RdYlBu")) # heat map palette
 
@@ -229,9 +232,7 @@ cluster_sd <- profile_data %>%
   summarise_all(sd)
 
 x <- as.data.frame( cluster_sd )
-head(x)
 xm <- melt( x, id.var = "cluster" )
-
 z_heat <- ggplot(xm, aes(x=cluster, y=variable, fill=value) ) +
   geom_tile() +
   scale_fill_gradientn(colours = pal_heat) +
@@ -240,11 +241,8 @@ z_heat <- ggplot(xm, aes(x=cluster, y=variable, fill=value) ) +
   labs(title = "Within-cluster Standard Deviation", x = "Clusters", y = "Attributes", fill = "Value")
 z_heat
 
-#---- Part 2c: Examine silhouette plot of the WORKING clusters  ----
-# Uses the predictor values and the corresponding assigned cluster
-# Need to subsample from the cluster result above as distance matrix take long time.
-
-# Take a subsample of the clusters and the predictors for the silhouette plot. 
+#---- Create a silhouette plot of the current clusters.
+# Uses another subsample from the cluster result above as distance matrix take long time.
 sil_n <- 10000
 silx <- sample( 1:length( samp[ , 1] ), sil_n )
 
@@ -260,24 +258,35 @@ sk <- silhouette(cs, c_dist)
 par(mfrow = c(1, 1))
 plot(sk, col = 1:nclust, border=NA, main = "Silhouette plot across clusters" )
 
+#---- Gap statistic section. Explored but no longer used. Data is too large
+# for a sample to be meaningful, and results are very similar to silhouette plots.
 
-#---- Part 3 of 3: Detailed examination of N clusters  ----
-#---- Part 3a: Show cluster groupings using PCA ----
+# s <- 10000 # sample from predictor matrix 
+# sidx <- sample( 1:length( tx_clean[ , 1] ), s )
+# samp <- tx_clean[ sidx, ]
+# 
+# .Random.seed <- saved_seed
+# gskmn <- clusGap(samp, FUN = kmeans, K.max = 10, B = 10)
+# plot( gskmn )
 
-#-- Can take some time so it makes its own cluster 
+
+#---- Part 6 : Detailed examination of N clusters  ----
+
+#---- Show cluster groupings using PCA
+#-- The necessary prcomp() function takes some time, so the function below
+#-- uses its own, smaller sample to make its own cluster.
 pca_n <- 25000
 
 #Returns a list of results (loadings table, and 2 plots)
-pca_results <- ClusterPCA( tx_clean, pca_n, nclust ) # uses global variable stack_data_clean
-names(pca_results) <- c("loadings", "plot1","plot2")
+pca_results <- ClusterPCA( tx_clean, pca_n, nclust )
+names(pca_results) <- c("loadings", "plot1", "plot2")
 pca_results$plot1
 #Percentage of variance explained by dimensions
 #eigenvalue <- round(get_eigenvalue(res_pca), 1)
 #var_percent <- eigenvalue$variance.percent
 
 
-#---- Part 3b: Violins of predictor contributions to WORKING clusters ----
-
+#---- Violin plots of predictor contributions to the WORKING clusters
 x <- as.data.frame( samp )
 x$cluster <- as.factor( cluster_result$cluster )
 
@@ -290,13 +299,11 @@ vplots <-
   geom_violin(trim = FALSE) +
   facet_wrap(~ predictor, scales = "free_y") +
   theme_minimal() +
-  labs(title = "Violin Plots of Predictors Across k-means Clusters",
-       x = "Cluster",
+  labs(x = "Cluster",
        y = "Value")
 vplots
 
-
-#---- Part 4: Spatialize the WORKING clusters ----
+#---- Part 7: Spatialize the WORKING clusters ----
 # NB: To show a comprehensive map, can either:
 #     a) re-cluster the entire data set (using imax and randomz from above) or
 #     b) Predict to the unsampled portion of the raster. 
@@ -304,7 +311,6 @@ vplots
 # Building a predictor raster takes time. Not useful to run this until 
 # a comparison RMD report is being generated. 
 
-write_name <- paste0( '/MSEA_BR_10vB_6cluster_', today )
 out_tif_fname <- paste0( write_name, '.tif' )
 
 # initialize target data structure 
@@ -353,9 +359,8 @@ z_map
 writeRaster( cluster_raster, paste0( results_dir, out_tif_fname ), overwrite=TRUE)
 
 
-#---- Knit and render Markdown file -----
-# 2024/04/29: It looks like this has gotten easier in the last 2 years ... version up!
-
+#---- Part 8: Knit and render Markdown file -----
+# NOTE: See https://bookdown.org/yihui/rmarkdown-cookbook/ for help with the RMD file.
 
 ### Process file 
 # To HTML ... 
@@ -370,8 +375,8 @@ library( kableExtra)
 
 rmarkdown::render( "Classification_DFO_PDF.Rmd",   
                    output_format = 'pdf_document',
-                   output_dir ="C:/Data/Git/Classification-DFO/Results",
-                   write_name )
+                   output_dir = results_dir,
+                   output_file = write_name )
 
 
 #---- Some details on correlation analysis ... ----
